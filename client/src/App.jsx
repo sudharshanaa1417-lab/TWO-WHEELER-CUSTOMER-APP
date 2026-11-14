@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   FileSpreadsheet,
@@ -28,9 +28,11 @@ import {
   pushCustomerToServer,
   syncWithServer
 } from './db/apiSync';
+import { getTranslation } from './utils/i18n';
 
 export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('twf_theme') || 'aurora');
+  const [lang, setLang] = useState(() => localStorage.getItem('twf_lang') || 'en');
   const [activeTab, setActiveTab] = useState('home');
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,20 +47,26 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState('');
 
+  const t = useMemo(() => getTranslation(lang), [lang]);
+
   const showToast = useCallback((message) => {
     setToast(message);
   }, []);
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(''), 3200);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setToast(''), 3200);
+    return () => clearTimeout(timer);
   }, [toast]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('twf_theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('twf_lang', lang);
+  }, [lang]);
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -84,16 +92,16 @@ export default function App() {
           const updated = await replaceAllCustomers(res.customers);
           setCustomers(updated);
           setServerConnected(true);
-          if (!silent) showToast('Synced with Render server & saved offline');
+          if (!silent) showToast(lang === 'ta' ? 'சர்வரோடு ஒத்திசைக்கப்பட்டது' : 'Synced with Render server & saved offline');
         } else {
           setServerConnected(false);
-          if (!silent) showToast('Running in Offline Local Storage mode');
+          if (!silent) showToast(lang === 'ta' ? 'ஆஃப்லைன் சேமிப்பு முறையில் இயங்குகிறது' : 'Running in Offline Local Storage mode');
         }
       } finally {
         setSyncing(false);
       }
     },
-    [showToast]
+    [showToast, lang]
   );
 
   useEffect(() => {
@@ -134,10 +142,28 @@ export default function App() {
     if (selectedCustomer?.id === saved.id) {
       setSelectedCustomer(saved);
     }
-    showToast(isEdit ? 'Customer profile updated' : 'New customer saved offline');
+    showToast(
+      isEdit
+        ? lang === 'ta'
+          ? 'வாடிக்கையாளர் விவரங்கள் புதுப்பிக்கப்பட்டன'
+          : 'Customer profile updated'
+        : lang === 'ta'
+        ? 'புதிய வாடிக்கையாளர் ஆஃப்லைனில் சேமிக்கப்பட்டார்'
+        : 'New customer saved offline'
+    );
 
-    // Best-effort background push to Render API
     pushCustomerToServer(saved, isEdit).then((ok) => {
+      if (ok) setServerConnected(true);
+    });
+  }
+
+  async function handleUpdatePayment(id, updatedCustomer) {
+    const saved = await saveCustomer(updatedCustomer);
+    setCustomers((prev) => prev.map((c) => (c.id === id ? saved : c)));
+    if (selectedCustomer?.id === id) {
+      setSelectedCustomer(saved);
+    }
+    pushCustomerToServer(saved, true).then((ok) => {
       if (ok) setServerConnected(true);
     });
   }
@@ -146,7 +172,7 @@ export default function App() {
     await removeCustomer(id);
     setCustomers((prev) => prev.filter((c) => c.id !== id));
     setSelectedCustomer(null);
-    showToast('Customer deleted from local storage');
+    showToast(lang === 'ta' ? 'வாடிக்கையாளர் நீக்கப்பட்டார்' : 'Customer deleted from local storage');
     deleteCustomerOnServer(id);
   }
 
@@ -171,7 +197,11 @@ export default function App() {
     }
 
     setCustomers(nextList);
-    showToast(`Imported ${rows.length} customer records`);
+    showToast(
+      lang === 'ta'
+        ? `${rows.length} வாடிக்கையாளர் தகவல்கள் இறக்குமதி செய்யப்பட்டன`
+        : `Imported ${rows.length} customer records`
+    );
     syncWithServer(nextList).then((res) => {
       if (res.synced) setServerConnected(true);
     });
@@ -181,14 +211,14 @@ export default function App() {
     const seeded = await replaceAllCustomers(DEMO_CUSTOMERS);
     setCustomers(seeded);
     setSettingsOpen(false);
-    showToast('Loaded sample TN 15 customer data');
+    showToast(lang === 'ta' ? 'மாதிரி வாடிக்கையாளர் தகவல்கள் ஏற்றப்பட்டன' : 'Loaded sample TN 15 customer data');
   }
 
   async function handleClearAll() {
     const empty = await replaceAllCustomers([]);
     setCustomers(empty);
     setSettingsOpen(false);
-    showToast('Local offline database cleared');
+    showToast(lang === 'ta' ? 'அனைத்து தகவல்களும் அழிக்கப்பட்டன' : 'Local offline database cleared');
   }
 
   return (
@@ -204,6 +234,9 @@ export default function App() {
         <Header
           theme={theme}
           onToggleTheme={() => setTheme((t) => (t === 'aurora' ? 'frost' : 'aurora'))}
+          lang={lang}
+          onToggleLanguage={() => setLang((l) => (l === 'en' ? 'ta' : 'en'))}
+          t={t}
           isOnline={isOnline}
           serverConnected={serverConnected}
           syncing={syncing}
@@ -214,7 +247,7 @@ export default function App() {
 
         {loading ? (
           <div className="glass-panel" style={{ padding: '40px', textAlign: 'center' }}>
-            Loading offline customer database...
+            {lang === 'ta' ? 'ஆஃப்லைன் தகவல்கள் ஏற்றப்படுகின்றன...' : 'Loading offline customer database...'}
           </div>
         ) : (
           <>
@@ -227,6 +260,7 @@ export default function App() {
                   setFormOpen(true);
                 }}
                 onSelectCustomer={setSelectedCustomer}
+                t={t}
               />
             )}
 
@@ -238,6 +272,7 @@ export default function App() {
                   setEditingCustomer(null);
                   setFormOpen(true);
                 }}
+                t={t}
               />
             )}
 
@@ -245,6 +280,7 @@ export default function App() {
               <SmartSearch
                 customers={customers}
                 onSelectCustomer={setSelectedCustomer}
+                t={t}
               />
             )}
 
@@ -253,6 +289,7 @@ export default function App() {
                 customers={customers}
                 onImportCustomers={handleImportCustomers}
                 onNotify={showToast}
+                t={t}
               />
             )}
           </>
@@ -268,7 +305,7 @@ export default function App() {
             onClick={() => setActiveTab('home')}
           >
             <Home size={18} />
-            <span>Home</span>
+            <span>{t('tabHome')}</span>
           </button>
 
           <button
@@ -277,7 +314,7 @@ export default function App() {
             onClick={() => setActiveTab('customers')}
           >
             <Users size={18} />
-            <span>Customers</span>
+            <span>{t('tabCustomers')}</span>
           </button>
 
           <button
@@ -289,7 +326,7 @@ export default function App() {
             }}
           >
             <UserPlus size={18} />
-            <span>Add</span>
+            <span>{t('tabAdd')}</span>
           </button>
 
           <button
@@ -298,7 +335,7 @@ export default function App() {
             onClick={() => setActiveTab('search')}
           >
             <Search size={18} />
-            <span>Search</span>
+            <span>{t('tabSearch')}</span>
           </button>
 
           <button
@@ -307,7 +344,7 @@ export default function App() {
             onClick={() => setActiveTab('excel')}
           >
             <FileSpreadsheet size={18} />
-            <span>Excel</span>
+            <span>{t('tabExcel')}</span>
           </button>
         </div>
       </nav>
@@ -321,9 +358,10 @@ export default function App() {
           setEditingCustomer(null);
         }}
         onSave={handleSaveCustomer}
+        t={t}
       />
 
-      {/* Full Customer Profile Modal */}
+      {/* Full Customer Profile Modal with Real-time Due Months Payment Update */}
       <CustomerProfileModal
         customer={selectedCustomer}
         onClose={() => setSelectedCustomer(null)}
@@ -333,7 +371,9 @@ export default function App() {
           setFormOpen(true);
         }}
         onDelete={handleDeleteCustomer}
+        onUpdatePayment={handleUpdatePayment}
         onNotify={showToast}
+        t={t}
       />
 
       {/* Offline Storage & Render Sync Settings Modal */}

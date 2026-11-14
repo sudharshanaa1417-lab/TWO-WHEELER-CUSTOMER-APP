@@ -9,6 +9,8 @@ export const EXCEL_COLUMNS = [
   { key: 'vehicleModel', header: 'Vehicle Model' },
   { key: 'financeAmount', header: 'Finance Amount' },
   { key: 'monthlyPayment', header: 'Monthly Payment' },
+  { key: 'totalDues', header: 'Total Due (Months)' },
+  { key: 'paidDues', header: 'Paid Due (Months)' },
   { key: 'remarks', header: 'Remarks' }
 ];
 
@@ -58,6 +60,15 @@ const HEADER_ALIASES = {
   monthlyemi: 'monthlyPayment',
   installment: 'monthlyPayment',
 
+  totaldues: 'totalDues',
+  totaldue: 'totalDues',
+  totalmonths: 'totalDues',
+  tenure: 'totalDues',
+
+  paiddues: 'paidDues',
+  paiddue: 'paidDues',
+  paidmonths: 'paidDues',
+
   remarks: 'remarks',
   notes: 'remarks',
   note: 'remarks',
@@ -78,17 +89,26 @@ function parseNumeric(val) {
 }
 
 export function exportCustomersToExcel(customers, format = 'xlsx') {
-  const rows = customers.map((c) => ({
-    'Customer Name': c.customerName || '',
-    'Vehicle Number': c.vehicleNumber || '',
-    'Loan Number': c.loanNumber || '',
-    'Mobile Number': c.mobileNumber || '',
-    Address: c.address || '',
-    'Vehicle Model': c.vehicleModel || '',
-    'Finance Amount': Number(c.financeAmount) || 0,
-    'Monthly Payment': Number(c.monthlyPayment) || 0,
-    Remarks: c.remarks || ''
-  }));
+  const rows = customers.map((c) => {
+    const totalD = Number(c.totalDues) || 12;
+    const paidD = Number(c.paidDues) || 0;
+    const pendingD = Math.max(0, totalD - paidD);
+
+    return {
+      'Customer Name': c.customerName || '',
+      'Vehicle Number': c.vehicleNumber || '',
+      'Loan Number': c.loanNumber || '',
+      'Mobile Number': c.mobileNumber || '',
+      Address: c.address || '',
+      'Vehicle Model': c.vehicleModel || '',
+      'Finance Amount': Number(c.financeAmount) || 0,
+      'Monthly Payment': Number(c.monthlyPayment) || 0,
+      'Total Due (Months)': totalD,
+      'Paid Due (Months)': paidD,
+      'Pending Due (Months)': pendingD,
+      Remarks: c.remarks || ''
+    };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(rows);
   worksheet['!cols'] = [
@@ -100,6 +120,9 @@ export function exportCustomersToExcel(customers, format = 'xlsx') {
     { wch: 24 },
     { wch: 16 },
     { wch: 16 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 18 },
     { wch: 34 }
   ];
 
@@ -121,6 +144,19 @@ export function exportCustomersToExcel(customers, format = 'xlsx') {
 export function downloadExcelTemplate() {
   const sampleRows = [
     {
+      'Customer Name': 'Aravind Kumar M',
+      'Vehicle Number': 'TN 09 CK 4421',
+      'Loan Number': 'B09 K41',
+      'Mobile Number': '9789054321',
+      Address: '5, Anna Salai, Teynampet, Chennai - 600018',
+      'Vehicle Model': 'Royal Enfield Classic 350',
+      'Finance Amount': 185000,
+      'Monthly Payment': 7800,
+      'Total Due (Months)': 12,
+      'Paid Due (Months)': 9,
+      Remarks: 'VIP Account · 3 months remaining'
+    },
+    {
       'Customer Name': 'Karthikeyan S',
       'Vehicle Number': 'TN 15 AB 1234',
       'Loan Number': 'A15 G27',
@@ -129,18 +165,9 @@ export function downloadExcelTemplate() {
       'Vehicle Model': 'Honda Activa 6G',
       'Finance Amount': 78000,
       'Monthly Payment': 3450,
+      'Total Due (Months)': 24,
+      'Paid Due (Months)': 18,
       Remarks: 'Regular payer · Due 5th'
-    },
-    {
-      'Customer Name': 'Muruganandam R',
-      'Vehicle Number': 'TN 15 AC 5678',
-      'Loan Number': 'A15 G28',
-      'Mobile Number': '9443218765',
-      Address: '27, Bazaar Street, Ulundurpet',
-      'Vehicle Model': 'TVS Apache RTR 160',
-      'Finance Amount': 112000,
-      'Monthly Payment': 4950,
-      Remarks: '12 EMIs remaining'
     }
   ];
 
@@ -154,6 +181,8 @@ export function downloadExcelTemplate() {
     { wch: 24 },
     { wch: 16 },
     { wch: 16 },
+    { wch: 18 },
+    { wch: 18 },
     { wch: 30 }
   ];
 
@@ -225,6 +254,8 @@ export function parseExcelFile(file) {
             vehicleModel: '',
             financeAmount: 0,
             monthlyPayment: 0,
+            totalDues: 12,
+            paidDues: 0,
             remarks: '',
             createdAt: now,
             updatedAt: now
@@ -239,7 +270,12 @@ export function parseExcelFile(file) {
             const strVal = String(cellVal ?? '').trim();
             if (strVal) hasAnyData = true;
 
-            if (canonicalKey === 'financeAmount' || canonicalKey === 'monthlyPayment') {
+            if (
+              canonicalKey === 'financeAmount' ||
+              canonicalKey === 'monthlyPayment' ||
+              canonicalKey === 'totalDues' ||
+              canonicalKey === 'paidDues'
+            ) {
               record[canonicalKey] = parseNumeric(cellVal);
             } else if (canonicalKey === 'vehicleNumber' || canonicalKey === 'loanNumber') {
               record[canonicalKey] = strVal.toUpperCase();
@@ -248,7 +284,6 @@ export function parseExcelFile(file) {
             }
           });
 
-          // Require at least a name, vehicle number, or mobile number
           if (hasAnyData && (record.customerName || record.vehicleNumber || record.mobileNumber)) {
             records.push(record);
           }

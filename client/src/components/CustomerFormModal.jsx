@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Save, UserPlus, X } from 'lucide-react';
 import {
-  estimateTenureMonths,
   formatINR,
   normalizeLoanNumber,
   normalizeVehicleNumber
 } from '../utils/format';
+import { computePendingDues } from '../db/indexedDb';
 
 const EMPTY_FORM = {
   customerName: '',
@@ -16,6 +16,8 @@ const EMPTY_FORM = {
   vehicleModel: '',
   financeAmount: '',
   monthlyPayment: '',
+  totalDues: 12,
+  paidDues: 0,
   remarks: ''
 };
 
@@ -23,7 +25,8 @@ export default function CustomerFormModal({
   isOpen,
   initialCustomer,
   onClose,
-  onSave
+  onSave,
+  t
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
@@ -31,6 +34,10 @@ export default function CustomerFormModal({
   useEffect(() => {
     if (!isOpen) return;
     if (initialCustomer) {
+      const f = Number(initialCustomer.financeAmount) || 0;
+      const m = Number(initialCustomer.monthlyPayment) || 0;
+      const fallbackTenure = f > 0 && m > 0 ? Math.max(1, Math.round(f / m)) : 12;
+
       setForm({
         customerName: initialCustomer.customerName || '',
         vehicleNumber: initialCustomer.vehicleNumber || '',
@@ -40,6 +47,8 @@ export default function CustomerFormModal({
         vehicleModel: initialCustomer.vehicleModel || '',
         financeAmount: initialCustomer.financeAmount ?? '',
         monthlyPayment: initialCustomer.monthlyPayment ?? '',
+        totalDues: initialCustomer.totalDues ?? fallbackTenure,
+        paidDues: initialCustomer.paidDues ?? 0,
         remarks: initialCustomer.remarks || ''
       });
     } else {
@@ -50,16 +59,29 @@ export default function CustomerFormModal({
 
   if (!isOpen) return null;
 
-  const estMonths = estimateTenureMonths(form.financeAmount, form.monthlyPayment);
+  const currentPending = computePendingDues(form.totalDues, form.paidDues);
 
   function handleChange(field, value) {
-    setForm((prev) => ({
-      ...prev,
-      [field]:
-        field === 'vehicleNumber' || field === 'loanNumber'
-          ? value.toUpperCase()
-          : value
-    }));
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        [field]:
+          field === 'vehicleNumber' || field === 'loanNumber'
+            ? value.toUpperCase()
+            : value
+      };
+
+      // Auto-suggest total dues if finance amount and monthly EMI are entered and totalDues wasn't manually changed
+      if ((field === 'financeAmount' || field === 'monthlyPayment') && !initialCustomer) {
+        const fa = Number(field === 'financeAmount' ? value : prev.financeAmount) || 0;
+        const mp = Number(field === 'monthlyPayment' ? value : prev.monthlyPayment) || 0;
+        if (fa > 0 && mp > 0) {
+          next.totalDues = Math.max(1, Math.round(fa / mp));
+        }
+      }
+
+      return next;
+    });
   }
 
   function handleSubmit(e) {
@@ -74,6 +96,9 @@ export default function CustomerFormModal({
       vehicleModel: form.vehicleModel.trim(),
       financeAmount: Number(form.financeAmount) || 0,
       monthlyPayment: Number(form.monthlyPayment) || 0,
+      totalDues: Math.max(1, Number(form.totalDues) || 1),
+      paidDues: Math.max(0, Number(form.paidDues) || 0),
+      pendingDues: currentPending,
       remarks: form.remarks.trim()
     };
 
@@ -101,10 +126,16 @@ export default function CustomerFormModal({
             </div>
             <div>
               <h2 id="customer-form-title" className="section-title">
-                {initialCustomer ? 'Edit Customer Profile' : 'Add Customer · New Entry'}
+                {initialCustomer
+                  ? t
+                    ? t('updateProfile')
+                    : 'Edit Customer Profile'
+                  : t
+                  ? t('newEntry')
+                  : 'Add Customer · New Entry'}
               </h2>
               <p className="section-subtitle">
-                Saves immediately to offline local storage
+                {t ? t('saveOffline') : 'Saves immediately to offline local storage'}
               </p>
             </div>
           </div>
@@ -134,7 +165,7 @@ export default function CustomerFormModal({
           <div className="form-grid">
             <div>
               <label className="field-label" htmlFor="f-name">
-                Customer Name *
+                {t ? t('customerName') : 'Customer Name'} *
               </label>
               <input
                 id="f-name"
@@ -149,7 +180,7 @@ export default function CustomerFormModal({
 
             <div>
               <label className="field-label" htmlFor="f-veh">
-                Vehicle Number *
+                {t ? t('vehicleNumber') : 'Vehicle Number'} *
               </label>
               <input
                 id="f-veh"
@@ -166,7 +197,7 @@ export default function CustomerFormModal({
             {/* Loan Number right below Vehicle Number as requested */}
             <div>
               <label className="field-label" htmlFor="f-loan">
-                Loan Number (கடன் எண்)
+                {t ? t('loanNumber') : 'Loan Number'}
               </label>
               <input
                 id="f-loan"
@@ -181,7 +212,7 @@ export default function CustomerFormModal({
 
             <div>
               <label className="field-label" htmlFor="f-mobile">
-                Mobile Number *
+                {t ? t('mobileNumber') : 'Mobile Number'} *
               </label>
               <input
                 id="f-mobile"
@@ -197,7 +228,7 @@ export default function CustomerFormModal({
 
             <div>
               <label className="field-label" htmlFor="f-model">
-                Vehicle Model
+                {t ? t('vehicleModel') : 'Vehicle Model'}
               </label>
               <input
                 id="f-model"
@@ -211,7 +242,7 @@ export default function CustomerFormModal({
 
             <div>
               <label className="field-label" htmlFor="f-amount">
-                Finance Amount (₹)
+                {t ? t('financeAmount') : 'Finance Amount'} (₹)
               </label>
               <input
                 id="f-amount"
@@ -227,7 +258,7 @@ export default function CustomerFormModal({
 
             <div>
               <label className="field-label" htmlFor="f-emi">
-                Monthly Payment / EMI (₹)
+                {t ? t('monthlyPayment') : 'Monthly Payment / EMI'} (₹)
               </label>
               <input
                 id="f-emi"
@@ -241,9 +272,43 @@ export default function CustomerFormModal({
               />
             </div>
 
+            {/* Total Due Months */}
+            <div>
+              <label className="field-label" htmlFor="f-total-dues">
+                {t ? t('totalDue') : 'Total Due (Months)'}
+              </label>
+              <input
+                id="f-total-dues"
+                type="number"
+                min="1"
+                max="120"
+                className="glass-input"
+                placeholder="e.g. 12 or 24"
+                value={form.totalDues}
+                onChange={(e) => handleChange('totalDues', e.target.value)}
+              />
+            </div>
+
+            {/* Paid Due Months */}
+            <div>
+              <label className="field-label" htmlFor="f-paid-dues">
+                {t ? t('paidDue') : 'Paid Dues (Months)'}
+              </label>
+              <input
+                id="f-paid-dues"
+                type="number"
+                min="0"
+                max={Number(form.totalDues) || 120}
+                className="glass-input"
+                placeholder="e.g. 9"
+                value={form.paidDues}
+                onChange={(e) => handleChange('paidDues', e.target.value)}
+              />
+            </div>
+
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="field-label" htmlFor="f-address">
-                Customer Address
+                {t ? t('address') : 'Customer Address'}
               </label>
               <textarea
                 id="f-address"
@@ -257,7 +322,7 @@ export default function CustomerFormModal({
 
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="field-label" htmlFor="f-remarks">
-                Remarks / Notes / Due Date
+                {t ? t('remarks') : 'Remarks / Notes / Due Date'}
               </label>
               <input
                 id="f-remarks"
@@ -270,25 +335,29 @@ export default function CustomerFormModal({
             </div>
           </div>
 
-          {estMonths && (
-            <div
-              className="glass-panel"
-              style={{
-                marginTop: '16px',
-                padding: '12px 16px',
-                background: 'var(--glass-bg-subtle)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '0.86rem'
-              }}
-            >
-              <span style={{ color: 'var(--text-secondary)' }}>Calculated Tenure:</span>
-              <span style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>
-                ~{estMonths} Months ({formatINR(form.monthlyPayment)} / month)
-              </span>
-            </div>
-          )}
+          {/* Real-time Due Balance Display */}
+          <div
+            className="glass-panel"
+            style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: 'var(--glass-bg-subtle)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '0.86rem',
+              flexWrap: 'wrap',
+              gap: '8px'
+            }}
+          >
+            <span style={{ color: 'var(--text-secondary)' }}>
+              {t ? t('totalDue') : 'Total Due'}: <strong>{form.totalDues || 0} mos</strong> ·{' '}
+              {t ? t('paidDue') : 'Paid'}: <strong>{form.paidDues || 0} mos</strong>
+            </span>
+            <span className="pending-badge" style={{ fontSize: '0.84rem' }}>
+              {t ? t('pendingDue') : 'Pending / Balance'}: {currentPending} {t ? t('monthsShort') : 'mos'}
+            </span>
+          </div>
 
           <div
             style={{
@@ -299,11 +368,19 @@ export default function CustomerFormModal({
             }}
           >
             <button type="button" className="btn btn-glass" onClick={onClose}>
-              Cancel
+              {t ? t('cancel') : 'Cancel'}
             </button>
             <button type="submit" className="btn btn-primary">
               <Save size={16} />
-              <span>{initialCustomer ? 'Update Profile' : 'Save Customer'}</span>
+              <span>
+                {initialCustomer
+                  ? t
+                    ? t('updateProfile')
+                    : 'Update Profile'
+                  : t
+                  ? t('save')
+                  : 'Save Customer'}
+              </span>
             </button>
           </div>
         </form>

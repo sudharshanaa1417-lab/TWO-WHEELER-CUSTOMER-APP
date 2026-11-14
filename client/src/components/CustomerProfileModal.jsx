@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import {
   Bike,
   Calendar,
+  CheckCircle2,
+  Clock,
   Copy,
   Edit3,
   FileText,
@@ -9,28 +11,36 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  PlusCircle,
+  RotateCcw,
   Trash2,
   User,
   X
 } from 'lucide-react';
 import {
-  estimateTenureMonths,
   formatINR,
   formatShortDate
 } from '../utils/format';
+import { computePendingDues } from '../db/indexedDb';
 
 export default function CustomerProfileModal({
   customer,
   onClose,
   onEdit,
   onDelete,
-  onNotify
+  onUpdatePayment,
+  onNotify,
+  t
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!customer) return null;
 
-  const estMonths = estimateTenureMonths(customer.financeAmount, customer.monthlyPayment);
+  const totalDues = Number(customer.totalDues) || 12;
+  const paidDues = Number(customer.paidDues) || 0;
+  const pendingDues = computePendingDues(totalDues, paidDues);
+  const percentPaid = Math.min(100, Math.round((paidDues / Math.max(1, totalDues)) * 100));
+
   const digitsOnly = String(customer.mobileNumber || '').replace(/\D/g, '');
   const whatsappNumber = digitsOnly.length === 10 ? `91${digitsOnly}` : digitsOnly;
 
@@ -45,6 +55,9 @@ export default function CustomerProfileModal({
       `Address: ${customer.address || '-'}`,
       `Finance Amount: ${formatINR(customer.financeAmount)}`,
       `Monthly Payment: ${formatINR(customer.monthlyPayment)}`,
+      `Total Due: ${totalDues} ${t ? t('months') : 'months'}`,
+      `Paid Due: ${paidDues} ${t ? t('months') : 'months'}`,
+      `Pending / Balance Due: ${pendingDues} ${t ? t('months') : 'months'}`,
       `Remarks: ${customer.remarks || '-'}`
     ].join('\n');
 
@@ -54,6 +67,31 @@ export default function CustomerProfileModal({
     } catch {
       onNotify?.('Could not access clipboard');
     }
+  }
+
+  function handleIncrementPaid() {
+    if (paidDues >= totalDues) {
+      onNotify?.('All dues are already fully paid!');
+      return;
+    }
+    const nextPaid = paidDues + 1;
+    onUpdatePayment?.(customer.id, {
+      ...customer,
+      paidDues: nextPaid,
+      pendingDues: computePendingDues(totalDues, nextPaid)
+    });
+    onNotify?.(`Recorded EMI payment (${nextPaid}/${totalDues})`);
+  }
+
+  function handleDecrementPaid() {
+    if (paidDues <= 0) return;
+    const nextPaid = paidDues - 1;
+    onUpdatePayment?.(customer.id, {
+      ...customer,
+      paidDues: nextPaid,
+      pendingDues: computePendingDues(totalDues, nextPaid)
+    });
+    onNotify?.(`Reverted EMI payment (${nextPaid}/${totalDues})`);
   }
 
   return (
@@ -112,34 +150,131 @@ export default function CustomerProfileModal({
           </button>
         </div>
 
-        {/* Financial Highlights */}
+        {/* Financial & Due Months Strip (Replaces old EST. SPAN with Total Due & Pending Due as requested) */}
         <div
           className="finance-strip"
           style={{
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
             padding: '14px',
-            marginBottom: '16px'
+            marginBottom: '14px'
           }}
         >
           <div>
-            <div className="finance-stat-label">Finance Amount</div>
-            <div className="finance-stat-value" style={{ fontSize: '1.1rem' }}>
+            <div className="finance-stat-label">{t ? t('financeAmount') : 'Finance Amount'}</div>
+            <div className="finance-stat-value" style={{ fontSize: '1.05rem' }}>
               {formatINR(customer.financeAmount)}
             </div>
           </div>
+
           <div>
-            <div className="finance-stat-label">Monthly Payment</div>
+            <div className="finance-stat-label">{t ? t('monthlyPayment') : 'Monthly Payment'}</div>
             <div
               className="finance-stat-value"
-              style={{ fontSize: '1.1rem', color: 'var(--accent-emerald)' }}
+              style={{ fontSize: '1.05rem', color: 'var(--accent-emerald)' }}
             >
               {formatINR(customer.monthlyPayment)}
             </div>
           </div>
+
+          {/* User Requested: Total Due - (12month) */}
           <div>
-            <div className="finance-stat-label">Est. Tenure</div>
-            <div className="finance-stat-value" style={{ fontSize: '1.1rem' }}>
-              {estMonths ? `${estMonths} mo` : '—'}
+            <div className="finance-stat-label">{t ? t('totalDue') : 'Total Due'}</div>
+            <div
+              className="finance-stat-value"
+              style={{ fontSize: '1.05rem', color: 'var(--accent-cyan)' }}
+            >
+              {totalDues} {t ? t('monthsShort') : 'mos'}
+            </div>
+          </div>
+
+          {/* User Requested: Pending / Balance Due - (3month) */}
+          <div>
+            <div className="finance-stat-label">{t ? t('pendingDue') : 'Pending Due'}</div>
+            <div
+              className="finance-stat-value"
+              style={{
+                fontSize: '1.05rem',
+                color: pendingDues > 0 ? 'var(--accent-amber)' : 'var(--accent-emerald)',
+                fontWeight: 800
+              }}
+            >
+              {pendingDues} {t ? t('monthsShort') : 'mos'}
+            </div>
+          </div>
+        </div>
+
+        {/* Real-time Due Payment Tracker & Quick Increment Action */}
+        <div
+          className="glass-panel"
+          style={{
+            padding: '12px 14px',
+            borderRadius: '14px',
+            marginBottom: '16px',
+            background: 'var(--glass-bg-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.84rem' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              {t ? t('paidDue') : 'Paid'}: <strong style={{ color: 'var(--text-primary)' }}>{paidDues}</strong> / {totalDues} {t ? t('months') : 'months'}
+            </span>
+            <span className={pendingDues > 0 ? 'pending-badge' : 'total-due-badge'}>
+              {pendingDues > 0 ? `${pendingDues} ${t ? t('months') : 'months'} remaining` : 'Fully Paid ✓'}
+            </span>
+          </div>
+
+          {/* Visual Due Progress Bar */}
+          <div
+            style={{
+              width: '100%',
+              height: '8px',
+              borderRadius: '999px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              overflow: 'hidden'
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${percentPaid}%`,
+                background:
+                  percentPaid === 100
+                    ? 'var(--accent-emerald)'
+                    : 'linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-emerald) 100%)',
+                transition: 'width 0.3s ease'
+              }}
+            />
+          </div>
+
+          {/* Real-time Payment Action Buttons */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Real-time payment update:
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {paidDues > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-glass btn-sm"
+                  onClick={handleDecrementPaid}
+                  title="Undo 1 payment"
+                  style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+                >
+                  <RotateCcw size={12} />
+                  <span>-1</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleIncrementPaid}
+                style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+              >
+                <PlusCircle size={13} />
+                <span>{t ? t('recordPayment') : '+1 Due Paid'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -152,12 +287,12 @@ export default function CustomerProfileModal({
             style={{ textDecoration: 'none' }}
           >
             <Phone size={15} />
-            <span>Call Customer</span>
+            <span>{t ? t('callCustomer') : 'Call Customer'}</span>
           </a>
 
           <a
             href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-              `Hello ${customer.customerName}, this is a reminder from Two Wheeler Finance regarding your vehicle ${customer.vehicleNumber} (Loan No: ${customer.loanNumber || '-'}). Monthly EMI: ${formatINR(customer.monthlyPayment)}. Thank you!`
+              `Hello ${customer.customerName}, this is a reminder from Two Wheeler Finance regarding your vehicle ${customer.vehicleNumber} (Loan No: ${customer.loanNumber || '-'}). Total Due: ${totalDues} mos, Paid: ${paidDues} mos, Pending Due: ${pendingDues} mos. Monthly EMI: ${formatINR(customer.monthlyPayment)}. Thank you!`
             )}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -165,12 +300,12 @@ export default function CustomerProfileModal({
             style={{ textDecoration: 'none', borderColor: 'rgba(52, 211, 153, 0.4)' }}
           >
             <MessageCircle size={15} style={{ color: 'var(--accent-emerald)' }} />
-            <span>WhatsApp Reminder</span>
+            <span>{t ? t('whatsappReminder') : 'WhatsApp Reminder'}</span>
           </a>
 
           <button type="button" className="btn btn-glass btn-sm" onClick={handleCopySummary}>
             <Copy size={15} />
-            <span>Copy Profile</span>
+            <span>{t ? t('copyProfile') : 'Copy Profile'}</span>
           </button>
         </div>
 
@@ -188,7 +323,7 @@ export default function CustomerProfileModal({
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <FileText size={17} style={{ color: 'var(--accent-amber)', marginTop: '2px' }} />
               <div>
-                <div className="finance-stat-label">Loan Number</div>
+                <div className="finance-stat-label">{t ? t('loanNumber') : 'Loan Number'}</div>
                 <div style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
                   {customer.loanNumber || '—'}
                 </div>
@@ -196,9 +331,24 @@ export default function CustomerProfileModal({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <Clock size={17} style={{ color: 'var(--accent-cyan)', marginTop: '2px' }} />
+              <div>
+                <div className="finance-stat-label">
+                  {t ? t('totalDue') : 'Total Due'} &amp; {t ? t('pendingDue') : 'Pending Due'}
+                </div>
+                <div style={{ fontWeight: 600 }}>
+                  {totalDues} {t ? t('months') : 'months'} total · {paidDues} paid ·{' '}
+                  <span style={{ color: 'var(--accent-amber)', fontWeight: 700 }}>
+                    {pendingDues} {t ? t('months') : 'months'} pending
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <Phone size={17} style={{ color: 'var(--accent-emerald)', marginTop: '2px' }} />
               <div>
-                <div className="finance-stat-label">Mobile Number</div>
+                <div className="finance-stat-label">{t ? t('mobileNumber') : 'Mobile Number'}</div>
                 <div style={{ fontWeight: 600 }}>{customer.mobileNumber || '—'}</div>
               </div>
             </div>
@@ -206,7 +356,7 @@ export default function CustomerProfileModal({
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <MapPin size={17} style={{ color: 'var(--accent-cyan)', marginTop: '2px' }} />
               <div>
-                <div className="finance-stat-label">Address</div>
+                <div className="finance-stat-label">{t ? t('address') : 'Address'}</div>
                 <div>{customer.address || '—'}</div>
               </div>
             </div>
@@ -214,7 +364,7 @@ export default function CustomerProfileModal({
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <Bike size={17} style={{ color: 'var(--accent-amber)', marginTop: '2px' }} />
               <div>
-                <div className="finance-stat-label">Vehicle Model</div>
+                <div className="finance-stat-label">{t ? t('vehicleModel') : 'Vehicle Model'}</div>
                 <div>{customer.vehicleModel || '—'}</div>
               </div>
             </div>
@@ -239,7 +389,7 @@ export default function CustomerProfileModal({
                   borderLeft: '3px solid var(--accent-amber)'
                 }}
               >
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Remarks: </span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{t ? t('remarks') : 'Remarks'}: </span>
                 <span style={{ color: 'var(--text-secondary)' }}>{customer.remarks}</span>
               </div>
             )}
@@ -274,7 +424,7 @@ export default function CustomerProfileModal({
                 className="btn btn-glass btn-sm"
                 onClick={() => setConfirmDelete(false)}
               >
-                Cancel
+                {t ? t('cancel') : 'Cancel'}
               </button>
             </div>
           ) : (
@@ -285,13 +435,13 @@ export default function CustomerProfileModal({
               style={{ color: 'var(--accent-rose)', borderColor: 'rgba(251, 113, 133, 0.35)' }}
             >
               <Trash2 size={15} />
-              <span>Delete</span>
+              <span>{t ? t('delete') : 'Delete'}</span>
             </button>
           )}
 
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="button" className="btn btn-glass" onClick={onClose}>
-              Close
+              {t ? t('close') : 'Close'}
             </button>
             <button
               type="button"
@@ -299,7 +449,7 @@ export default function CustomerProfileModal({
               onClick={() => onEdit(customer)}
             >
               <Edit3 size={15} />
-              <span>Edit Customer</span>
+              <span>{t ? t('editCustomer') : 'Edit Customer'}</span>
             </button>
           </div>
         </div>

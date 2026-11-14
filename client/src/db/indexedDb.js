@@ -1,9 +1,9 @@
 const DB_NAME = 'twf_offline_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'customers';
 const META_STORE = 'meta';
-const FALLBACK_KEY = 'twf_customers_fallback_v2';
-const SEEDED_KEY = 'twf_seeded_v2';
+const FALLBACK_KEY = 'twf_customers_fallback_v3';
+const SEEDED_KEY = 'twf_seeded_v3';
 
 export const DEMO_CUSTOMERS = [
   {
@@ -16,6 +16,8 @@ export const DEMO_CUSTOMERS = [
     vehicleModel: 'Honda Activa 6G',
     financeAmount: 78000,
     monthlyPayment: 3450,
+    totalDues: 24,
+    paidDues: 18,
     remarks: 'Regular payer · Due 5th of every month',
     createdAt: '2026-01-10T09:00:00.000Z',
     updatedAt: '2026-01-10T09:00:00.000Z'
@@ -30,6 +32,8 @@ export const DEMO_CUSTOMERS = [
     vehicleModel: 'TVS Apache RTR 160',
     financeAmount: 112000,
     monthlyPayment: 4950,
+    totalDues: 24,
+    paidDues: 12,
     remarks: '12/24 EMIs completed · RC copy verified',
     createdAt: '2026-02-14T10:30:00.000Z',
     updatedAt: '2026-02-14T10:30:00.000Z'
@@ -44,6 +48,8 @@ export const DEMO_CUSTOMERS = [
     vehicleModel: 'Suzuki Access 125',
     financeAmount: 84000,
     monthlyPayment: 3700,
+    totalDues: 24,
+    paidDues: 20,
     remarks: 'Auto-debit active · Insurance valid till Dec',
     createdAt: '2026-03-03T11:15:00.000Z',
     updatedAt: '2026-03-03T11:15:00.000Z'
@@ -58,6 +64,8 @@ export const DEMO_CUSTOMERS = [
     vehicleModel: 'Royal Enfield Classic 350',
     financeAmount: 185000,
     monthlyPayment: 7800,
+    totalDues: 12,
+    paidDues: 9, // Exactly 3 pending dues as requested in example!
     remarks: 'VIP Account · Zero overdue',
     createdAt: '2026-04-18T14:20:00.000Z',
     updatedAt: '2026-04-18T14:20:00.000Z'
@@ -72,6 +80,8 @@ export const DEMO_CUSTOMERS = [
     vehicleModel: 'Bajaj Pulsar N160',
     financeAmount: 124000,
     monthlyPayment: 5200,
+    totalDues: 24,
+    paidDues: 19,
     remarks: 'Reminder sent for November EMI',
     createdAt: '2026-05-22T16:45:00.000Z',
     updatedAt: '2026-05-22T16:45:00.000Z'
@@ -109,7 +119,10 @@ function openDb() {
 
 function readLocalFallback() {
   try {
-    const raw = localStorage.getItem(FALLBACK_KEY) || localStorage.getItem('twf_customers_fallback_v1');
+    const raw =
+      localStorage.getItem(FALLBACK_KEY) ||
+      localStorage.getItem('twf_customers_fallback_v2') ||
+      localStorage.getItem('twf_customers_fallback_v1');
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -135,6 +148,45 @@ function ensureLoanNumber(customer, index = 0) {
   return `A15 G${String(27 + (index % 70)).padStart(2, '0')}`;
 }
 
+export function computePendingDues(totalDues, paidDues) {
+  const tot = Number(totalDues) || 0;
+  const pd = Number(paidDues) || 0;
+  return Math.max(0, tot - pd);
+}
+
+function sanitizeCustomerData(c, idx = 0) {
+  const f = Number(c.financeAmount) || 0;
+  const m = Number(c.monthlyPayment) || 0;
+  const calcTenure = f > 0 && m > 0 ? Math.max(1, Math.round(f / m)) : 12;
+
+  const totalDues =
+    c.totalDues !== undefined && c.totalDues !== null && c.totalDues !== ''
+      ? Math.max(1, Number(c.totalDues) || 1)
+      : calcTenure;
+
+  const paidDues =
+    c.paidDues !== undefined && c.paidDues !== null && c.paidDues !== ''
+      ? Math.max(0, Number(c.paidDues) || 0)
+      : 0;
+
+  return {
+    ...c,
+    id: c.id || `cust-${crypto.randomUUID().slice(0, 8)}`,
+    vehicleNumber: String(c.vehicleNumber || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ' '),
+    loanNumber: ensureLoanNumber(c, idx),
+    financeAmount: f,
+    monthlyPayment: m,
+    totalDues: totalDues,
+    paidDues: Math.min(totalDues, paidDues),
+    pendingDues: computePendingDues(totalDues, paidDues),
+    createdAt: c.createdAt || new Date().toISOString(),
+    updatedAt: c.updatedAt || new Date().toISOString()
+  };
+}
+
 export async function getAllCustomers() {
   try {
     const db = await openDb();
@@ -149,17 +201,15 @@ export async function getAllCustomers() {
     if (list.length === 0 && !localStorage.getItem(SEEDED_KEY)) {
       await replaceAllCustomers(DEMO_CUSTOMERS);
       localStorage.setItem(SEEDED_KEY, '1');
-      return [...DEMO_CUSTOMERS];
+      return DEMO_CUSTOMERS.map((c, i) => sanitizeCustomerData(c, i));
     }
 
-    // Auto-backfill loanNumber for any already existing records
     let needsUpdate = false;
     list = list.map((c, idx) => {
-      if (!c.loanNumber) {
+      if (!c.loanNumber || c.totalDues === undefined || c.paidDues === undefined) {
         needsUpdate = true;
-        return { ...c, loanNumber: ensureLoanNumber(c, idx) };
       }
-      return c;
+      return sanitizeCustomerData(c, idx);
     });
 
     if (needsUpdate) {
@@ -172,14 +222,11 @@ export async function getAllCustomers() {
   } catch {
     let list = readLocalFallback();
     if (list.length === 0 && !localStorage.getItem(SEEDED_KEY)) {
-      list = [...DEMO_CUSTOMERS];
+      list = DEMO_CUSTOMERS.map((c, i) => sanitizeCustomerData(c, i));
       writeLocalFallback(list);
       localStorage.setItem(SEEDED_KEY, '1');
     } else {
-      list = list.map((c, idx) => ({
-        ...c,
-        loanNumber: ensureLoanNumber(c, idx)
-      }));
+      list = list.map((c, idx) => sanitizeCustomerData(c, idx));
       writeLocalFallback(list);
     }
     return list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -188,22 +235,13 @@ export async function getAllCustomers() {
 
 export async function saveCustomer(customer) {
   const now = new Date().toISOString();
-  const record = {
-    ...customer,
-    id: customer.id || `cust-${crypto.randomUUID().slice(0, 8)}`,
-    vehicleNumber: String(customer.vehicleNumber || '')
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, ' '),
-    loanNumber: String(customer.loanNumber || '')
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, ' '),
-    financeAmount: Number(customer.financeAmount) || 0,
-    monthlyPayment: Number(customer.monthlyPayment) || 0,
-    createdAt: customer.createdAt || now,
-    updatedAt: now
-  };
+  const record = sanitizeCustomerData(
+    {
+      ...customer,
+      updatedAt: now
+    },
+    0
+  );
 
   try {
     const db = await openDb();
@@ -243,19 +281,7 @@ export async function removeCustomer(id) {
 }
 
 export async function replaceAllCustomers(records) {
-  const normalized = (records || []).map((c, idx) => ({
-    ...c,
-    id: c.id || `cust-${crypto.randomUUID().slice(0, 8)}`,
-    vehicleNumber: String(c.vehicleNumber || '')
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, ' '),
-    loanNumber: ensureLoanNumber(c, idx),
-    financeAmount: Number(c.financeAmount) || 0,
-    monthlyPayment: Number(c.monthlyPayment) || 0,
-    createdAt: c.createdAt || new Date().toISOString(),
-    updatedAt: c.updatedAt || new Date().toISOString()
-  }));
+  const normalized = (records || []).map((c, idx) => sanitizeCustomerData(c, idx));
 
   try {
     const db = await openDb();

@@ -15,19 +15,10 @@ import {
   extractTopPrefixes,
   smartSearchCustomers
 } from '../utils/search';
+import { computePendingDues } from '../db/indexedDb';
 import HighlightText from './HighlightText';
 
-const FIELD_LABELS = {
-  vehicleNumber: 'Vehicle Number',
-  loanNumber: 'Loan Number',
-  customerName: 'Customer Name',
-  mobileNumber: 'Mobile Number',
-  address: 'Address',
-  vehicleModel: 'Vehicle Model',
-  remarks: 'Remarks'
-};
-
-export default function SmartSearch({ customers, onSelectCustomer }) {
+export default function SmartSearch({ customers, onSelectCustomer, t }) {
   const [query, setQuery] = useState('TN 15');
   const [fieldFilter, setFieldFilter] = useState('all');
 
@@ -37,16 +28,28 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
     [customers, query, fieldFilter]
   );
 
+  const fieldLabels = {
+    vehicleNumber: t ? t('vehicleNumber') : 'Vehicle Number',
+    loanNumber: t ? t('loanNumber') : 'Loan Number',
+    customerName: t ? t('customerName') : 'Customer Name',
+    mobileNumber: t ? t('mobileNumber') : 'Mobile Number',
+    address: t ? t('address') : 'Address',
+    vehicleModel: t ? t('vehicleModel') : 'Vehicle Model',
+    remarks: t ? t('remarks') : 'Remarks'
+  };
+
   return (
     <section className="glass-panel" style={{ padding: '22px' }}>
       <div className="section-header">
         <div>
           <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Sparkles size={20} style={{ color: 'var(--accent-amber)' }} />
-            <span>Smart Search · Find Customer</span>
+            <span>{t ? t('smartSearchTitle') : 'Smart Search · Find Customer'}</span>
           </h2>
           <p className="section-subtitle">
-            Search by Vehicle Number (e.g. TN 15), Loan Number (e.g. A15 G27), Customer Name, Mobile, Address, or Model
+            {t
+              ? t('smartSearchSubtitle')
+              : 'Search by Vehicle Number (e.g. TN 15), Loan Number (e.g. A15 G27), Customer Name, Mobile, Address, or Model'}
           </p>
         </div>
       </div>
@@ -73,7 +76,11 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
             fontWeight: 600,
             borderRadius: '18px'
           }}
-          placeholder="Type TN 15, A15 G27, Karthik, 98765, Activa, Villupuram..."
+          placeholder={
+            t
+              ? t('searchPlaceholder')
+              : 'Type TN 15, A15 G27, Karthik, 98765, Activa, Villupuram...'
+          }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoFocus
@@ -113,7 +120,11 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
             className={`glass-pill ${fieldFilter === f.key ? 'glass-pill--active' : ''}`}
             onClick={() => setFieldFilter(f.key)}
           >
-            {f.label}
+            {f.key === 'all'
+              ? t
+                ? t('allFields')
+                : 'All Fields'
+              : fieldLabels[f.key] || f.label}
           </button>
         ))}
       </div>
@@ -129,7 +140,7 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
           }}
         >
           <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-            QUICK RTO:
+            {t ? t('quickRto') : 'QUICK RTO:'}
           </span>
           {topPrefixes.map((p) => (
             <button
@@ -172,9 +183,11 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
             background: 'var(--glass-bg-subtle)'
           }}
         >
-          <p style={{ margin: 0, fontWeight: 600 }}>Start typing to find any customer</p>
+          <p style={{ margin: 0, fontWeight: 600 }}>{t ? t('startTyping') : 'Start typing to find any customer'}</p>
           <p style={{ margin: '6px 0 0', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-            Example: Searching <strong>TN 15</strong> or <strong>A15 G27</strong> immediately lists all matching records with live highlighted text.
+            {t
+              ? t('searchExample')
+              : 'Example: Searching TN 15 or A15 G27 immediately lists all matching records with live highlighted text.'}
           </p>
         </div>
       ) : (
@@ -190,10 +203,9 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
             }}
           >
             <span>
-              Found <strong style={{ color: 'var(--text-primary)' }}>{results.length}</strong>{' '}
-              matching {results.length === 1 ? 'customer' : 'customers'} for &quot;{query.trim()}&quot;
+              {results.length} {t ? t('foundCustomers') : 'matching customers for'} &quot;{query.trim()}&quot;
             </span>
-            <span>Tap a result to open full profile</span>
+            <span>{t ? t('tapResult') : 'Tap a result to open full profile'}</span>
           </div>
 
           {results.length === 0 ? (
@@ -205,118 +217,148 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
                 background: 'var(--glass-bg-subtle)'
               }}
             >
-              <p style={{ margin: 0, fontWeight: 600 }}>No matching customer found</p>
+              <p style={{ margin: 0, fontWeight: 600 }}>{t ? t('noMatches') : 'No matching customer found'}</p>
               <p style={{ margin: '6px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Try switching filter to &quot;All Fields&quot; or searching another part of Vehicle No, Loan No (e.g. A15), Name, or Phone.
+                {t
+                  ? t('noMatchesSubtitle')
+                  : 'Try switching filter to "All Fields" or searching another part of Vehicle No, Loan No (e.g. A15), Name, or Phone.'}
               </p>
             </div>
           ) : (
             <div className="customer-cards-grid">
-              {results.map(({ customer: c, matchedFields }) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className="glass-panel glass-tile customer-card"
-                  onClick={() => onSelectCustomer(c)}
-                  style={{ background: 'var(--glass-bg-subtle)', textAlign: 'left' }}
-                >
-                  <div className="customer-card-top">
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                        <User size={15} style={{ color: 'var(--accent-emerald)' }} />
-                        <h3 className="customer-name">
-                          <HighlightText text={c.customerName} query={query} />
-                        </h3>
+              {results.map(({ customer: c, matchedFields }) => {
+                const totalDues = Number(c.totalDues) || 12;
+                const paidDues = Number(c.paidDues) || 0;
+                const pendingDues = computePendingDues(totalDues, paidDues);
+
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="glass-panel glass-tile customer-card"
+                    onClick={() => onSelectCustomer(c)}
+                    style={{ background: 'var(--glass-bg-subtle)', textAlign: 'left' }}
+                  >
+                    <div className="customer-card-top">
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                          <User size={15} style={{ color: 'var(--accent-emerald)' }} />
+                          <h3 className="customer-name">
+                            <HighlightText text={c.customerName} query={query} />
+                          </h3>
+                        </div>
+                        <div
+                          className="customer-meta-item"
+                          style={{ marginTop: '5px', fontSize: '0.84rem', color: 'var(--text-secondary)' }}
+                        >
+                          <Bike size={14} style={{ color: 'var(--accent-cyan)' }} />
+                          <span>
+                            <HighlightText text={c.vehicleModel || 'Two Wheeler'} query={query} />
+                          </span>
+                        </div>
                       </div>
-                      <div
-                        className="customer-meta-item"
-                        style={{ marginTop: '5px', fontSize: '0.84rem', color: 'var(--text-secondary)' }}
-                      >
-                        <Bike size={14} style={{ color: 'var(--accent-cyan)' }} />
-                        <span>
-                          <HighlightText text={c.vehicleModel || 'Two Wheeler'} query={query} />
+
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                        <span className="vehicle-plate">
+                          <HighlightText text={c.vehicleNumber} query={query} />
                         </span>
+                        {c.loanNumber && (
+                          <span
+                            className="glass-pill"
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              color: 'var(--accent-amber)',
+                              borderColor: 'rgba(251, 191, 36, 0.45)',
+                              padding: '2px 8px'
+                            }}
+                          >
+                            Loan: <HighlightText text={c.loanNumber} query={query} />
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
-                      <span className="vehicle-plate">
-                        <HighlightText text={c.vehicleNumber} query={query} />
+                    <div className="customer-meta">
+                      <span className="customer-meta-item">
+                        <Phone size={13} style={{ color: 'var(--accent-emerald)' }} />
+                        <HighlightText text={c.mobileNumber} query={query} />
                       </span>
-                      {c.loanNumber && (
-                        <span
-                          className="glass-pill"
-                          style={{
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '0.76rem',
-                            fontWeight: 700,
-                            color: 'var(--accent-amber)',
-                            borderColor: 'rgba(251, 191, 36, 0.45)',
-                            padding: '2px 8px'
-                          }}
-                        >
-                          Loan: <HighlightText text={c.loanNumber} query={query} />
+                      {c.address && (
+                        <span className="customer-meta-item">
+                          <MapPin size={13} style={{ color: 'var(--accent-amber)' }} />
+                          <span>
+                            <HighlightText text={c.address} query={query} />
+                          </span>
                         </span>
                       )}
                     </div>
-                  </div>
 
-                  <div className="customer-meta">
-                    <span className="customer-meta-item">
-                      <Phone size={13} style={{ color: 'var(--accent-emerald)' }} />
-                      <HighlightText text={c.mobileNumber} query={query} />
-                    </span>
-                    {c.address && (
-                      <span className="customer-meta-item">
-                        <MapPin size={13} style={{ color: 'var(--accent-amber)' }} />
-                        <span>
-                          <HighlightText text={c.address} query={query} />
-                        </span>
-                      </span>
-                    )}
-                  </div>
-
-                  {c.remarks && (
-                    <div style={{ fontSize: '0.79rem', color: 'var(--text-muted)' }}>
-                      Remarks: <HighlightText text={c.remarks} query={query} />
-                    </div>
-                  )}
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '8px',
-                      paddingTop: '8px',
-                      borderTop: '1px solid rgba(255,255,255,0.08)',
-                      flexWrap: 'wrap'
-                    }}
-                  >
-                    <div className="chips-row">
-                      {matchedFields.map((mf) => (
-                        <span
-                          key={mf}
-                          className="glass-pill"
-                          style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                    {/* Finance Strip with Total Due & Pending Due */}
+                    <div className="finance-strip" style={{ marginTop: '6px' }}>
+                      <div>
+                        <div className="finance-stat-label">{t ? t('financeAmount') : 'Finance Amount'}</div>
+                        <div className="finance-stat-value">{formatINR(c.financeAmount)}</div>
+                      </div>
+                      <div>
+                        <div className="finance-stat-label">{t ? t('monthlyPayment') : 'Monthly Payment'}</div>
+                        <div className="finance-stat-value" style={{ color: 'var(--accent-emerald)' }}>
+                          {formatINR(c.monthlyPayment)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="finance-stat-label">{t ? t('totalDue') : 'Total Due'}</div>
+                        <div className="finance-stat-value" style={{ color: 'var(--accent-cyan)' }}>
+                          {totalDues} {t ? t('monthsShort') : 'mos'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="finance-stat-label">{t ? t('pendingDue') : 'Pending Due'}</div>
+                        <div
+                          className="finance-stat-value"
+                          style={{
+                            color: pendingDues > 0 ? 'var(--accent-amber)' : 'var(--accent-emerald)',
+                            fontWeight: 800
+                          }}
                         >
-                          Matched: {FIELD_LABELS[mf] || mf}
-                        </span>
-                      ))}
+                          {pendingDues} {t ? t('monthsShort') : 'mos'}
+                        </div>
+                      </div>
                     </div>
-                    <span
+
+                    {c.remarks && (
+                      <div style={{ fontSize: '0.79rem', color: 'var(--text-muted)' }}>
+                        Remarks: <HighlightText text={c.remarks} query={query} />
+                      </div>
+                    )}
+
+                    <div
                       style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        color: 'var(--accent-emerald)'
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        paddingTop: '8px',
+                        borderTop: '1px solid rgba(255,255,255,0.08)',
+                        flexWrap: 'wrap'
                       }}
                     >
-                      {formatINR(c.monthlyPayment)}/mo
-                    </span>
-                  </div>
-                </button>
-              ))}
+                      <div className="chips-row">
+                        {matchedFields.map((mf) => (
+                          <span
+                            key={mf}
+                            className="glass-pill"
+                            style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                          >
+                            Matched: {fieldLabels[mf] || mf}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </>

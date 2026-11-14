@@ -13,7 +13,7 @@ import {
   parseExcelFile
 } from '../utils/excel';
 
-export default function ExcelManager({ customers, onImportCustomers, onNotify }) {
+export default function ExcelManager({ customers, onImportCustomers, onNotify, t }) {
   const fileInputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [previewRows, setPreviewRows] = useState([]);
@@ -50,10 +50,12 @@ export default function ExcelManager({ customers, onImportCustomers, onNotify })
           <div>
             <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FileSpreadsheet size={20} style={{ color: 'var(--accent-emerald)' }} />
-              <span>Excel · Import / Export</span>
+              <span>{t ? t('excelTitle') : 'Excel · Import / Export'}</span>
             </h2>
             <p className="section-subtitle">
-              Works 100% offline in your browser — export all {customers.length} records or bulk import spreadsheets
+              {t
+                ? t('excelSub')
+                : `Works 100% offline in your browser — export all ${customers.length} records or bulk import spreadsheets`}
             </p>
           </div>
         </div>
@@ -68,7 +70,7 @@ export default function ExcelManager({ customers, onImportCustomers, onNotify })
             }}
           >
             <Download size={16} />
-            <span>Export Excel (.xlsx)</span>
+            <span>{t ? t('exportXlsx') : 'Export Excel (.xlsx)'}</span>
           </button>
 
           <button
@@ -80,7 +82,7 @@ export default function ExcelManager({ customers, onImportCustomers, onNotify })
             }}
           >
             <Download size={16} />
-            <span>Export CSV (.csv)</span>
+            <span>{t ? t('exportCsv') : 'Export CSV (.csv)'}</span>
           </button>
 
           <button
@@ -92,35 +94,26 @@ export default function ExcelManager({ customers, onImportCustomers, onNotify })
             }}
           >
             <FileSpreadsheet size={16} style={{ color: 'var(--accent-cyan)' }} />
-            <span>Sample Template</span>
+            <span>{t ? t('sampleTemplate') : 'Sample Template'}</span>
           </button>
         </div>
       </section>
 
       {/* Import Section */}
       <section className="glass-panel" style={{ padding: '22px' }}>
-        <h3 className="section-title" style={{ fontSize: '1.08rem', marginBottom: '6px' }}>
-          Import Customers from Excel / CSV
-        </h3>
-        <p className="section-subtitle" style={{ marginBottom: '14px' }}>
-          Supported columns: Customer Name, Vehicle Number, Mobile Number, Address, Vehicle Model,
-          Finance Amount, Monthly Payment, Remarks
-        </p>
+        <div className="section-header">
+          <div>
+            <h3 className="section-title" style={{ fontSize: '1.1rem' }}>
+              Import Spreadsheet (Excel / CSV)
+            </h3>
+            <p className="section-subtitle">
+              Supports .xlsx, .xls, and .csv with auto-detection of Vehicle No, Loan No, Name, Dues, etc.
+            </p>
+          </div>
+        </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            handleFile(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-
+        {/* Drop Zone */}
         <div
-          className={`excel-dropzone ${dragging ? 'excel-dropzone--drag' : ''}`}
-          onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
             setDragging(true);
@@ -129,27 +122,51 @@ export default function ExcelManager({ customers, onImportCustomers, onNotify })
           onDrop={(e) => {
             e.preventDefault();
             setDragging(false);
-            handleFile(e.dataTransfer.files?.[0]);
+            if (e.dataTransfer.files?.[0]) {
+              handleFile(e.dataTransfer.files[0]);
+            }
           }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            border: `2px dashed ${dragging ? 'var(--accent-cyan)' : 'var(--glass-border)'}`,
+            borderRadius: '20px',
+            padding: '36px 20px',
+            textAlign: 'center',
+            cursor: 'pointer',
+            background: dragging ? 'rgba(34, 211, 238, 0.08)' : 'var(--glass-bg-subtle)',
+            transition: 'all 0.2s ease'
+          }}
         >
-          <Upload size={28} style={{ color: 'var(--accent-cyan)', marginBottom: '8px' }} />
-          <div style={{ fontWeight: 700, fontSize: '0.98rem' }}>
-            Tap to choose an Excel (.xlsx / .xls / .csv) file or drag & drop here
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx, .xls, .csv"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files?.[0]) handleFile(e.target.files[0]);
+            }}
+          />
+          <Upload
+            size={34}
+            style={{
+              color: dragging ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              marginBottom: '10px'
+            }}
+          />
+          <div style={{ fontWeight: 700, fontSize: '1.02rem', marginBottom: '4px' }}>
+            {fileName ? `Selected: ${fileName}` : t ? t('dropFiles') : 'Drop your Excel (.xlsx, .xls) or .csv file here'}
           </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Preview rows before saving to your offline database
-          </div>
+          <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
+            or click to browse from device · 100% offline parsing
+          </p>
         </div>
 
         {parseError && (
           <div
             style={{
-              marginTop: '14px',
-              padding: '12px 14px',
-              borderRadius: '14px',
+              marginTop: '12px',
+              padding: '10px 14px',
+              borderRadius: '12px',
               background: 'rgba(251, 113, 133, 0.16)',
               border: '1px solid rgba(251, 113, 133, 0.45)',
               color: 'var(--accent-rose)',
@@ -160,87 +177,111 @@ export default function ExcelManager({ customers, onImportCustomers, onNotify })
           </div>
         )}
 
+        {/* Preview & Import Options */}
         {previewRows.length > 0 && (
-          <div style={{ marginTop: '18px' }}>
-            <div className="section-header" style={{ marginBottom: '12px' }}>
+          <div style={{ marginTop: '20px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+                marginBottom: '14px'
+              }}
+            >
               <div>
-                <h4 style={{ margin: 0, fontSize: '0.98rem' }}>
-                  Preview: {previewRows.length} rows from {fileName}
-                </h4>
+                <span style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                  ✓ {previewRows.length} valid customer rows found in {fileName}
+                </span>
+                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Review parsed rows below before importing to your offline database.
+                </p>
               </div>
 
-              <div className="chips-row">
-                <button
-                  type="button"
-                  className={`glass-pill ${importMode === 'merge' ? 'glass-pill--active' : ''}`}
-                  onClick={() => setImportMode('merge')}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <select
+                  className="glass-select"
+                  style={{ width: 'auto', minWidth: '150px' }}
+                  value={importMode}
+                  onChange={(e) => setImportMode(e.target.value)}
                 >
-                  Append / Merge
+                  <option value="merge">Merge &amp; Update (Recommended)</option>
+                  <option value="replace">Clean Replace All</option>
+                </select>
+
+                <button type="button" className="btn btn-primary" onClick={handleConfirmImport}>
+                  <CheckCircle2 size={16} />
+                  <span>{t ? t('confirmImport') : 'Confirm & Import Customers'}</span>
                 </button>
-                <button
-                  type="button"
-                  className={`glass-pill ${importMode === 'replace' ? 'glass-pill--active' : ''}`}
-                  onClick={() => setImportMode('replace')}
-                >
-                  Replace Existing
-                </button>
+
                 <button
                   type="button"
                   className="glass-pill"
-                  onClick={() => setPreviewRows([])}
+                  onClick={() => {
+                    setPreviewRows([]);
+                    setFileName('');
+                  }}
+                  title="Cancel import"
                 >
-                  <X size={14} />
-                  <span>Clear</span>
+                  <X size={15} />
                 </button>
               </div>
             </div>
 
-            <div className="table-scroll" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            <div className="table-scroll" style={{ maxHeight: '280px' }}>
               <table className="glass-table">
                 <thead>
                   <tr>
                     <th>Customer Name</th>
                     <th>Vehicle Number</th>
+                    <th>Loan Number</th>
                     <th>Mobile</th>
-                    <th>Vehicle Model</th>
-                    <th>Finance</th>
-                    <th>Monthly</th>
+                    <th>Model</th>
+                    <th>Finance (₹)</th>
+                    <th>Monthly (₹)</th>
+                    <th>Total Due</th>
+                    <th>Paid Due</th>
+                    <th>Address</th>
+                    <th>Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {previewRows.slice(0, 50).map((r, idx) => (
+                  {previewRows.slice(0, 15).map((row, idx) => (
                     <tr key={idx}>
-                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {r.customerName}
-                      </td>
+                      <td style={{ fontWeight: 600 }}>{row.customerName || '—'}</td>
                       <td>
-                        <span className="vehicle-plate">{r.vehicleNumber}</span>
+                        <span className="vehicle-plate" style={{ fontSize: '0.78rem' }}>
+                          {row.vehicleNumber || '—'}
+                        </span>
                       </td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{r.mobileNumber}</td>
-                      <td>{r.vehicleModel}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{formatINR(r.financeAmount)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-emerald)' }}>
-                        {formatINR(r.monthlyPayment)}
+                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-amber)' }}>
+                        {row.loanNumber || '—'}
+                      </td>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{row.mobileNumber || '—'}</td>
+                      <td>{row.vehicleModel || '—'}</td>
+                      <td>{formatINR(row.financeAmount)}</td>
+                      <td style={{ color: 'var(--accent-emerald)', fontWeight: 700 }}>
+                        {formatINR(row.monthlyPayment)}
+                      </td>
+                      <td style={{ color: 'var(--accent-cyan)' }}>{row.totalDues || 12} mos</td>
+                      <td>{row.paidDues || 0} mos</td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {row.address || '—'}
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        {row.remarks || '—'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleConfirmImport}
-              >
-                <CheckCircle2 size={16} />
-                <span>
-                  Confirm Import ({previewRows.length}{' '}
-                  {previewRows.length === 1 ? 'Row' : 'Rows'})
-                </span>
-              </button>
-            </div>
+            {previewRows.length > 15 && (
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                Showing first 15 of {previewRows.length} rows...
+              </p>
+            )}
           </div>
         )}
       </section>

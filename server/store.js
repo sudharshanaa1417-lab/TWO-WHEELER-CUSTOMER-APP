@@ -18,6 +18,8 @@ const SEED_CUSTOMERS = [
     vehicleModel: 'Honda Activa 6G',
     financeAmount: 78000,
     monthlyPayment: 3450,
+    totalDues: 24,
+    paidDues: 18,
     remarks: 'Regular payer · Due 5th of every month',
     createdAt: '2026-01-10T09:00:00.000Z',
     updatedAt: '2026-01-10T09:00:00.000Z'
@@ -32,6 +34,8 @@ const SEED_CUSTOMERS = [
     vehicleModel: 'TVS Apache RTR 160',
     financeAmount: 112000,
     monthlyPayment: 4950,
+    totalDues: 24,
+    paidDues: 12,
     remarks: '12/24 EMIs completed · RC copy verified',
     createdAt: '2026-02-14T10:30:00.000Z',
     updatedAt: '2026-02-14T10:30:00.000Z'
@@ -46,6 +50,8 @@ const SEED_CUSTOMERS = [
     vehicleModel: 'Suzuki Access 125',
     financeAmount: 84000,
     monthlyPayment: 3700,
+    totalDues: 24,
+    paidDues: 20,
     remarks: 'Auto-debit active · Insurance valid till Dec',
     createdAt: '2026-03-03T11:15:00.000Z',
     updatedAt: '2026-03-03T11:15:00.000Z'
@@ -60,6 +66,8 @@ const SEED_CUSTOMERS = [
     vehicleModel: 'Royal Enfield Classic 350',
     financeAmount: 185000,
     monthlyPayment: 7800,
+    totalDues: 12,
+    paidDues: 9, // Exactly 3 pending dues
     remarks: 'VIP Account · Zero overdue',
     createdAt: '2026-04-18T14:20:00.000Z',
     updatedAt: '2026-04-18T14:20:00.000Z'
@@ -74,6 +82,8 @@ const SEED_CUSTOMERS = [
     vehicleModel: 'Bajaj Pulsar N160',
     financeAmount: 124000,
     monthlyPayment: 5200,
+    totalDues: 24,
+    paidDues: 19,
     remarks: 'Reminder sent for November EMI',
     createdAt: '2026-05-22T16:45:00.000Z',
     updatedAt: '2026-05-22T16:45:00.000Z'
@@ -90,6 +100,20 @@ function normalizeLoanNumber(raw = '') {
 
 export function sanitizeCustomer(input, existing = null) {
   const now = new Date().toISOString();
+  const f = Number(input.financeAmount ?? existing?.financeAmount ?? 0) || 0;
+  const m = Number(input.monthlyPayment ?? existing?.monthlyPayment ?? 0) || 0;
+  const defTenure = f > 0 && m > 0 ? Math.max(1, Math.round(f / m)) : 12;
+
+  const totalDues =
+    input.totalDues !== undefined
+      ? Math.max(1, Number(input.totalDues) || 1)
+      : existing?.totalDues ?? defTenure;
+
+  const paidDues =
+    input.paidDues !== undefined
+      ? Math.max(0, Number(input.paidDues) || 0)
+      : existing?.paidDues ?? 0;
+
   return {
     id: existing?.id || input.id || `cust-${crypto.randomUUID().slice(0, 8)}`,
     customerName: String(input.customerName ?? existing?.customerName ?? '').trim(),
@@ -98,8 +122,11 @@ export function sanitizeCustomer(input, existing = null) {
     mobileNumber: String(input.mobileNumber ?? existing?.mobileNumber ?? '').trim(),
     address: String(input.address ?? existing?.address ?? '').trim(),
     vehicleModel: String(input.vehicleModel ?? existing?.vehicleModel ?? '').trim(),
-    financeAmount: Number(input.financeAmount ?? existing?.financeAmount ?? 0) || 0,
-    monthlyPayment: Number(input.monthlyPayment ?? existing?.monthlyPayment ?? 0) || 0,
+    financeAmount: f,
+    monthlyPayment: m,
+    totalDues,
+    paidDues,
+    pendingDues: Math.max(0, totalDues - paidDues),
     remarks: String(input.remarks ?? existing?.remarks ?? '').trim(),
     createdAt: existing?.createdAt || input.createdAt || now,
     updatedAt: now

@@ -7,12 +7,14 @@ import {
   Users
 } from 'lucide-react';
 import { formatINR } from '../utils/format';
+import { computePendingDues } from '../db/indexedDb';
 
 export default function DashboardHome({
   customers,
   onNavigate,
   onOpenAdd,
-  onSelectCustomer
+  onSelectCustomer,
+  t
 }) {
   const recentCustomers = customers.slice(0, 3);
 
@@ -22,7 +24,7 @@ export default function DashboardHome({
       <section className="kpi-ribbon" aria-label="Customer Summary">
         <div className="glass-panel kpi-card" style={{ flex: '1 1 auto' }}>
           <div>
-            <div className="kpi-label">Total Customers</div>
+            <div className="kpi-label">{t ? t('totalCustomers') : 'Total Customers'}</div>
             <div className="kpi-value">{customers.length}</div>
           </div>
           <div className="kpi-icon-wrap" style={{ color: 'var(--accent-emerald)' }}>
@@ -42,14 +44,16 @@ export default function DashboardHome({
             <div className="module-icon module-icon--emerald">
               <Users size={25} />
             </div>
-            <span className="module-badge">{customers.length} Records</span>
+            <span className="module-badge">
+              {customers.length} {t ? t('records') : 'Records'}
+            </span>
           </div>
           <div>
-            <h2 className="module-title">Customers</h2>
-            <p className="module-subtitle">Customer List</p>
+            <h2 className="module-title">{t ? t('customersModule') : 'Customers'}</h2>
+            <p className="module-subtitle">{t ? t('customersSubtitle') : 'Customer List'}</p>
           </div>
           <div className="module-footer">
-            <span>View all profiles, loan numbers &amp; vehicle details</span>
+            <span>{t ? t('customersFooter') : 'View all profiles, loan numbers & vehicle details'}</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -63,14 +67,14 @@ export default function DashboardHome({
             <div className="module-icon module-icon--cyan">
               <UserPlus size={25} />
             </div>
-            <span className="module-badge">New Entry</span>
+            <span className="module-badge">{t ? t('newEntry') : 'New Entry'}</span>
           </div>
           <div>
-            <h2 className="module-title">Add Customer</h2>
-            <p className="module-subtitle">New Entry</p>
+            <h2 className="module-title">{t ? t('addModule') : 'Add Customer'}</h2>
+            <p className="module-subtitle">{t ? t('addSubtitle') : 'New Entry'}</p>
           </div>
           <div className="module-footer">
-            <span>Add Vehicle, Loan No (e.g. A15 G27) &amp; Save offline</span>
+            <span>{t ? t('addFooter') : 'Add Vehicle, Loan No (e.g. A15 G27) & Save offline'}</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -87,11 +91,11 @@ export default function DashboardHome({
             <span className="module-badge">Live Highlight</span>
           </div>
           <div>
-            <h2 className="module-title">Smart Search</h2>
-            <p className="module-subtitle">Find Customer</p>
+            <h2 className="module-title">{t ? t('searchModule') : 'Smart Search'}</h2>
+            <p className="module-subtitle">{t ? t('searchSubtitle') : 'Find Customer'}</p>
           </div>
           <div className="module-footer">
-            <span>Search by Vehicle No (TN 15), Loan No (A15 G27), or Name</span>
+            <span>{t ? t('searchFooter') : 'Search by Vehicle No (TN 15), Loan No (A15 G27), or Name'}</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -108,11 +112,11 @@ export default function DashboardHome({
             <span className="module-badge">.XLSX / .CSV</span>
           </div>
           <div>
-            <h2 className="module-title">Excel</h2>
-            <p className="module-subtitle">Import / Export</p>
+            <h2 className="module-title">{t ? t('excelModule') : 'Excel'}</h2>
+            <p className="module-subtitle">{t ? t('excelSubtitle') : 'Import / Export'}</p>
           </div>
           <div className="module-footer">
-            <span>Bulk upload &amp; backup sheets offline</span>
+            <span>{t ? t('excelFooter') : 'Bulk upload & backup sheets offline'}</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -124,76 +128,103 @@ export default function DashboardHome({
           <div className="section-header" style={{ marginBottom: '12px' }}>
             <div>
               <h3 className="section-title" style={{ fontSize: '1.02rem' }}>
-                Recent Customer Entries
+                {t ? t('recentEntries') : 'Recent Customer Entries'}
               </h3>
-              <p className="section-subtitle">Tap any card to open full customer profile</p>
+              <p className="section-subtitle">
+                {t ? t('recentEntriesSubtitle') : 'Tap any card to open full customer profile'}
+              </p>
             </div>
             <button
               type="button"
               className="glass-pill"
               onClick={() => onNavigate('customers')}
             >
-              View All
+              {t ? t('viewAll') : 'View All'}
             </button>
           </div>
 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
               gap: '10px'
             }}
           >
-            {recentCustomers.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="glass-panel glass-tile"
-                onClick={() => onSelectCustomer(c)}
-                style={{
-                  padding: '14px',
-                  borderRadius: '18px',
-                  background: 'var(--glass-bg-subtle)',
-                  textAlign: 'left'
-                }}
-              >
-                <div
+            {recentCustomers.map((c) => {
+              const totalDues = Number(c.totalDues) || 12;
+              const paidDues = Number(c.paidDues) || 0;
+              const pendingDues = computePendingDues(totalDues, paidDues);
+
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="glass-panel glass-tile"
+                  onClick={() => onSelectCustomer(c)}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '8px'
+                    padding: '14px',
+                    borderRadius: '18px',
+                    background: 'var(--glass-bg-subtle)',
+                    textAlign: 'left'
                   }}
                 >
-                  <span className="vehicle-plate">{c.vehicleNumber || 'NO PLATE'}</span>
-                  {c.loanNumber && (
-                    <span
-                      className="glass-pill"
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        color: 'var(--accent-amber)',
-                        padding: '2px 7px'
-                      }}
-                    >
-                      {c.loanNumber}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    <span className="vehicle-plate">{c.vehicleNumber || 'NO PLATE'}</span>
+                    {c.loanNumber && (
+                      <span
+                        className="glass-pill"
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          color: 'var(--accent-amber)',
+                          padding: '2px 7px'
+                        }}
+                      >
+                        {c.loanNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '0.96rem' }}>{c.customerName}</div>
+                  <div
+                    style={{
+                      fontSize: '0.8rem',
+                      color: 'var(--text-secondary)',
+                      marginTop: '2px'
+                    }}
+                  >
+                    {c.vehicleModel || 'Two Wheeler'} · {c.mobileNumber}
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginTop: '8px',
+                      paddingTop: '6px',
+                      borderTop: '1px solid rgba(255,255,255,0.06)',
+                      fontSize: '0.76rem'
+                    }}
+                  >
+                    <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
+                      Total: {totalDues}m
                     </span>
-                  )}
-                </div>
-                <div style={{ fontWeight: 700, fontSize: '0.96rem' }}>{c.customerName}</div>
-                <div
-                  style={{
-                    fontSize: '0.8rem',
-                    color: 'var(--text-secondary)',
-                    marginTop: '2px'
-                  }}
-                >
-                  {c.vehicleModel || 'Two Wheeler'} · {c.mobileNumber}
-                </div>
-              </button>
-            ))}
+                    <span className="pending-badge" style={{ fontSize: '0.74rem', padding: '1px 6px' }}>
+                      Pending: {pendingDues}m
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}

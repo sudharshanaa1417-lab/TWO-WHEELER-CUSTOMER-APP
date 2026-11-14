@@ -1,9 +1,12 @@
 import React from 'react';
-import { Bike, Cloud, CloudOff, Moon, RefreshCw, Server, Sun } from 'lucide-react';
+import { Bike, Cloud, CloudOff, Languages, Moon, RefreshCw, Server, Sun } from 'lucide-react';
 
 export default function Header({
   theme,
   onToggleTheme,
+  lang,
+  onToggleLanguage,
+  t,
   isOnline,
   serverConnected,
   syncing,
@@ -26,12 +29,28 @@ export default function Header({
             <Bike size={28} strokeWidth={2.1} />
           </div>
           <div>
-            <h1 className="brand-title">TWO WHEELER FINANCE</h1>
-            <p className="brand-subtitle">Customer Management System</p>
+            <h1 className="brand-title">{t('appTitle')}</h1>
+            <p className="brand-subtitle">{t('appSubtitle')}</p>
           </div>
         </div>
 
         <div className="header-controls">
+          {/* Dual Language Switcher */}
+          <button
+            type="button"
+            className="glass-pill"
+            onClick={onToggleLanguage}
+            title={lang === 'en' ? 'தமிழில் மாற்றவும்' : 'Switch to English'}
+            style={{
+              fontWeight: 700,
+              background: 'rgba(34, 211, 238, 0.12)',
+              borderColor: 'rgba(34, 211, 238, 0.45)'
+            }}
+          >
+            <Languages size={14} style={{ color: 'var(--accent-cyan)' }} />
+            <span>{lang === 'en' ? 'தமிழ்' : 'English'}</span>
+          </button>
+
           <span
             className={`glass-pill ${serverConnected ? 'glass-pill--active' : ''}`}
             title={
@@ -43,12 +62,12 @@ export default function Header({
             {isOnline && serverConnected ? (
               <>
                 <Cloud size={14} style={{ color: 'var(--accent-emerald)' }} />
-                <span>Cloud + Offline</span>
+                <span>{t('cloudOffline')}</span>
               </>
             ) : (
               <>
                 <CloudOff size={14} style={{ color: 'var(--accent-amber)' }} />
-                <span>Offline Storage</span>
+                <span>{t('offlineStorage')}</span>
               </>
             )}
           </span>
@@ -61,7 +80,7 @@ export default function Header({
             title="Sync local storage with Render server"
           >
             <RefreshCw size={14} className={syncing ? 'spin-icon' : ''} />
-            <span>{syncing ? 'Syncing...' : 'Sync'}</span>
+            <span>{syncing ? t('syncing') : t('sync')}</span>
           </button>
 
           <button
@@ -71,7 +90,7 @@ export default function Header({
             title="Configure Render Backend URL & Storage"
           >
             <Server size={14} />
-            <span>Server</span>
+            <span>{t('server')}</span>
           </button>
 
           <button
