@@ -1,0 +1,18 @@
+{
+  "name": "Two Wheeler Finance Customer Manager",
+  "short_name": "2W Finance",
+  "description": "Offline-first Two Wheeler Finance Customer Management System with Smart Search & Excel Import/Export",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#06121d",
+  "theme_color": "#06121d",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
