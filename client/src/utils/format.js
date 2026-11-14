@@ -15,6 +15,14 @@ export function normalizeVehicleNumber(raw = '') {
     .trim();
 }
 
+export function normalizeLoanNumber(raw = '') {
+  return String(raw)
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function formatShortDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);

@@ -12,6 +12,7 @@ const SEED_CUSTOMERS = [
     id: 'cust-tn15-001',
     customerName: 'Karthikeyan S',
     vehicleNumber: 'TN 15 AB 1234',
+    loanNumber: 'A15 G27',
     mobileNumber: '9876543210',
     address: '14, Gandhi Road, Villupuram - 605602',
     vehicleModel: 'Honda Activa 6G',
@@ -25,6 +26,7 @@ const SEED_CUSTOMERS = [
     id: 'cust-tn15-002',
     customerName: 'Muruganandam R',
     vehicleNumber: 'TN 15 AC 5678',
+    loanNumber: 'A15 G28',
     mobileNumber: '9443218765',
     address: '27, Bazaar Street, Ulundurpet - 606107',
     vehicleModel: 'TVS Apache RTR 160',
@@ -38,6 +40,7 @@ const SEED_CUSTOMERS = [
     id: 'cust-tn15-003',
     customerName: 'Priyadharshini V',
     vehicleNumber: 'TN 15 AD 9012',
+    loanNumber: 'A15 G29',
     mobileNumber: '9080123456',
     address: '88, Nehru Nagar, Kallakurichi - 606202',
     vehicleModel: 'Suzuki Access 125',
@@ -51,6 +54,7 @@ const SEED_CUSTOMERS = [
     id: 'cust-tn09-004',
     customerName: 'Aravind Kumar M',
     vehicleNumber: 'TN 09 CK 4421',
+    loanNumber: 'B09 K41',
     mobileNumber: '9789054321',
     address: '5, Anna Salai, Teynampet, Chennai - 600018',
     vehicleModel: 'Royal Enfield Classic 350',
@@ -64,6 +68,7 @@ const SEED_CUSTOMERS = [
     id: 'cust-tn38-005',
     customerName: 'Senthil Nathan K',
     vehicleNumber: 'TN 38 BQ 7789',
+    loanNumber: 'C38 N12',
     mobileNumber: '9629876543',
     address: '102, Avinashi Road, Peelamedu, Coimbatore - 641004',
     vehicleModel: 'Bajaj Pulsar N160',
@@ -79,12 +84,17 @@ function normalizeVehicleNumber(raw = '') {
   return String(raw).trim().toUpperCase().replace(/\s+/g, ' ');
 }
 
+function normalizeLoanNumber(raw = '') {
+  return String(raw).trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
 export function sanitizeCustomer(input, existing = null) {
   const now = new Date().toISOString();
   return {
     id: existing?.id || input.id || `cust-${crypto.randomUUID().slice(0, 8)}`,
     customerName: String(input.customerName ?? existing?.customerName ?? '').trim(),
     vehicleNumber: normalizeVehicleNumber(input.vehicleNumber ?? existing?.vehicleNumber ?? ''),
+    loanNumber: normalizeLoanNumber(input.loanNumber ?? existing?.loanNumber ?? ''),
     mobileNumber: String(input.mobileNumber ?? existing?.mobileNumber ?? '').trim(),
     address: String(input.address ?? existing?.address ?? '').trim(),
     vehicleModel: String(input.vehicleModel ?? existing?.vehicleModel ?? '').trim(),

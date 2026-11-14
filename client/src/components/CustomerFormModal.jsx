@@ -3,12 +3,14 @@ import { Save, UserPlus, X } from 'lucide-react';
 import {
   estimateTenureMonths,
   formatINR,
+  normalizeLoanNumber,
   normalizeVehicleNumber
 } from '../utils/format';
 
 const EMPTY_FORM = {
   customerName: '',
   vehicleNumber: '',
+  loanNumber: '',
   mobileNumber: '',
   address: '',
   vehicleModel: '',
@@ -32,6 +34,7 @@ export default function CustomerFormModal({
       setForm({
         customerName: initialCustomer.customerName || '',
         vehicleNumber: initialCustomer.vehicleNumber || '',
+        loanNumber: initialCustomer.loanNumber || '',
         mobileNumber: initialCustomer.mobileNumber || '',
         address: initialCustomer.address || '',
         vehicleModel: initialCustomer.vehicleModel || '',
@@ -52,7 +55,10 @@ export default function CustomerFormModal({
   function handleChange(field, value) {
     setForm((prev) => ({
       ...prev,
-      [field]: field === 'vehicleNumber' ? value.toUpperCase() : value
+      [field]:
+        field === 'vehicleNumber' || field === 'loanNumber'
+          ? value.toUpperCase()
+          : value
     }));
   }
 
@@ -62,6 +68,7 @@ export default function CustomerFormModal({
       ...initialCustomer,
       customerName: form.customerName.trim(),
       vehicleNumber: normalizeVehicleNumber(form.vehicleNumber),
+      loanNumber: normalizeLoanNumber(form.loanNumber),
       mobileNumber: form.mobileNumber.trim(),
       address: form.address.trim(),
       vehicleModel: form.vehicleModel.trim(),
@@ -156,6 +163,22 @@ export default function CustomerFormModal({
               />
             </div>
 
+            {/* Loan Number right below Vehicle Number as requested */}
+            <div>
+              <label className="field-label" htmlFor="f-loan">
+                Loan Number (கடன் எண்)
+              </label>
+              <input
+                id="f-loan"
+                type="text"
+                className="glass-input"
+                style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}
+                placeholder="e.g. A15 G27"
+                value={form.loanNumber}
+                onChange={(e) => handleChange('loanNumber', e.target.value)}
+              />
+            </div>
+
             <div>
               <label className="field-label" htmlFor="f-mobile">
                 Mobile Number *
@@ -180,24 +203,23 @@ export default function CustomerFormModal({
                 id="f-model"
                 type="text"
                 className="glass-input"
-                placeholder="e.g. Honda Activa 6G"
+                placeholder="e.g. Honda Activa 6G / Pulsar 150"
                 value={form.vehicleModel}
                 onChange={(e) => handleChange('vehicleModel', e.target.value)}
               />
             </div>
 
             <div>
-              <label className="field-label" htmlFor="f-finance">
+              <label className="field-label" htmlFor="f-amount">
                 Finance Amount (₹)
               </label>
               <input
-                id="f-finance"
+                id="f-amount"
                 type="number"
                 min="0"
-                step="100"
+                step="500"
                 className="glass-input"
-                style={{ fontFamily: 'var(--font-mono)' }}
-                placeholder="e.g. 78000"
+                placeholder="e.g. 75000"
                 value={form.financeAmount}
                 onChange={(e) => handleChange('financeAmount', e.target.value)}
               />
@@ -205,80 +227,75 @@ export default function CustomerFormModal({
 
             <div>
               <label className="field-label" htmlFor="f-emi">
-                Monthly Payment (₹)
+                Monthly Payment / EMI (₹)
               </label>
               <input
                 id="f-emi"
                 type="number"
                 min="0"
-                step="50"
+                step="100"
                 className="glass-input"
-                style={{ fontFamily: 'var(--font-mono)' }}
-                placeholder="e.g. 3450"
+                placeholder="e.g. 3500"
                 value={form.monthlyPayment}
                 onChange={(e) => handleChange('monthlyPayment', e.target.value)}
               />
             </div>
 
-            <div className="form-span-2">
+            <div style={{ gridColumn: '1 / -1' }}>
               <label className="field-label" htmlFor="f-address">
-                Address
+                Customer Address
               </label>
               <textarea
                 id="f-address"
                 rows={2}
-                className="glass-textarea"
-                placeholder="Door No, Street, Town / City, Pincode"
+                className="glass-input"
+                placeholder="e.g. 14, Gandhi Road, Villupuram - 605602"
                 value={form.address}
                 onChange={(e) => handleChange('address', e.target.value)}
               />
             </div>
 
-            <div className="form-span-2">
+            <div style={{ gridColumn: '1 / -1' }}>
               <label className="field-label" htmlFor="f-remarks">
-                Remarks
+                Remarks / Notes / Due Date
               </label>
               <input
                 id="f-remarks"
                 type="text"
                 className="glass-input"
-                placeholder="Due date, RC status, payment behavior, guarantor note..."
+                placeholder="e.g. Due 5th of every month · Guarantor signed"
                 value={form.remarks}
                 onChange={(e) => handleChange('remarks', e.target.value)}
               />
             </div>
           </div>
 
-          {(Number(form.financeAmount) > 0 || Number(form.monthlyPayment) > 0) && (
+          {estMonths && (
             <div
-              className="finance-strip"
-              style={{ marginTop: '14px', gridTemplateColumns: 'repeat(3, 1fr)' }}
+              className="glass-panel"
+              style={{
+                marginTop: '16px',
+                padding: '12px 16px',
+                background: 'var(--glass-bg-subtle)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.86rem'
+              }}
             >
-              <div>
-                <div className="finance-stat-label">Financed</div>
-                <div className="finance-stat-value">{formatINR(form.financeAmount)}</div>
-              </div>
-              <div>
-                <div className="finance-stat-label">Monthly EMI</div>
-                <div className="finance-stat-value" style={{ color: 'var(--accent-emerald)' }}>
-                  {formatINR(form.monthlyPayment)}
-                </div>
-              </div>
-              <div>
-                <div className="finance-stat-label">Approx. Ratio</div>
-                <div className="finance-stat-value" style={{ color: 'var(--accent-cyan)' }}>
-                  {estMonths ? `~${estMonths} mos` : '—'}
-                </div>
-              </div>
+              <span style={{ color: 'var(--text-secondary)' }}>Calculated Tenure:</span>
+              <span style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                ~{estMonths} Months ({formatINR(form.monthlyPayment)} / month)
+              </span>
             </div>
           )}
 
           <div
             style={{
               display: 'flex',
-              justifyContent: 'flex-end',
               gap: '10px',
-              marginTop: '18px'
+              justifyContent: 'flex-end',
+              marginTop: '22px'
             }}
           >
             <button type="button" className="btn btn-glass" onClick={onClose}>
@@ -286,7 +303,7 @@ export default function CustomerFormModal({
             </button>
             <button type="submit" className="btn btn-primary">
               <Save size={16} />
-              <span>{initialCustomer ? 'Update Customer' : 'Save Customer'}</span>
+              <span>{initialCustomer ? 'Update Profile' : 'Save Customer'}</span>
             </button>
           </div>
         </form>

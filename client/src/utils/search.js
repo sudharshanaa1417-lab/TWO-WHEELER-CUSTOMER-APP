@@ -1,6 +1,7 @@
 export const SEARCH_FIELDS = [
   { key: 'all', label: 'All Fields' },
   { key: 'vehicleNumber', label: 'Vehicle No' },
+  { key: 'loanNumber', label: 'Loan No' },
   { key: 'customerName', label: 'Name' },
   { key: 'mobileNumber', label: 'Mobile' },
   { key: 'address', label: 'Address' },
@@ -9,6 +10,7 @@ export const SEARCH_FIELDS = [
 
 const ALL_SEARCHABLE_KEYS = [
   'vehicleNumber',
+  'loanNumber',
   'customerName',
   'mobileNumber',
   'vehicleModel',
@@ -35,9 +37,9 @@ function mergeRanges(ranges) {
 /**
  * Finds match ranges in `text` for `query`.
  * Supports:
- *  1. Exact case-insensitive matches (e.g. "TN 15")
- *  2. Space-agnostic matches (e.g. "tn15" matching "TN 15 AB 1234")
- *  3. Multi-token matches (e.g. "TN 1234" matching and highlighting both "TN" and "1234")
+ *  1. Exact case-insensitive matches (e.g. "TN 15", "A15 G27")
+ *  2. Space-agnostic matches (e.g. "a15g27" matching "A15 G27", "tn15" matching "TN 15 AB 1234")
+ *  3. Multi-token matches (e.g. "A15 1234" matching and highlighting both "A15" and "1234")
  */
 export function findMatchRanges(text, query) {
   const source = String(text ?? '');
@@ -58,7 +60,7 @@ export function findMatchRanges(text, query) {
   }
   if (directRanges.length > 0) return directRanges;
 
-  // 2. Space-tolerant matching (e.g. "tn15" -> "TN 15", "987654" -> "98765 43210")
+  // 2. Space-tolerant matching (e.g. "a15g27" -> "A15 G27", "tn15" -> "TN 15")
   const compactQuery = lowerQuery.replace(/\s+/g, '');
   if (compactQuery.length > 0) {
     const charMap = [];
@@ -83,7 +85,7 @@ export function findMatchRanges(text, query) {
     if (compactRanges.length > 0) return compactRanges;
   }
 
-  // 3. Multi-token partial highlighting (when query has multiple words like "TN 1234" or "Karthik Activa")
+  // 3. Multi-token partial highlighting (when query has multiple words like "A15 G27" or "TN 1234")
   const tokens = lowerQuery.split(/\s+/).filter((t) => t.length > 0);
   if (tokens.length > 1) {
     const tokenRanges = [];
@@ -152,9 +154,17 @@ export function smartSearchCustomers(customers, query, fieldFilter = 'all') {
 
       if (exactMatch || compactMatch) {
         matchedFields.push(key);
-        let score = key === 'vehicleNumber' ? 120 : key === 'customerName' ? 100 : 80;
+        let score =
+          key === 'vehicleNumber'
+            ? 120
+            : key === 'loanNumber'
+            ? 115
+            : key === 'customerName'
+            ? 100
+            : 80;
+
         if (lowerVal.startsWith(lowerQ) || compactVal.startsWith(compactQ)) {
-          score += 40; // Prefix bonus (e.g. "TN 15" at start of vehicle number)
+          score += 40; // Prefix bonus (e.g. "TN 15" or "A15" at start)
         }
         if (score > bestScore) bestScore = score;
       }
@@ -169,13 +179,12 @@ export function smartSearchCustomers(customers, query, fieldFilter = 'all') {
 
     // A customer qualifies if:
     // 1) Direct full phrase match in one of the fields, OR
-    // 2) If query has multiple tokens (e.g. "Karthik Activa" or "TN 1234"), ALL tokens are covered across searchable fields!
+    // 2) If query has multiple tokens (e.g. "A15 G27", "TN 1234"), ALL tokens are covered across searchable fields
     const allTokensCovered = tokens.length > 1 && tokens.every((t) => tokensMatched.has(t));
 
     if (bestScore > 0 || allTokensCovered) {
       if (bestScore === 0) {
         bestScore = 60;
-        // Collect which fields matched any token
         for (const key of keysToSearch) {
           const lowerVal = String(customer[key] ?? '').toLowerCase();
           if (tokens.some((t) => lowerVal.includes(t)) && !matchedFields.includes(key)) {

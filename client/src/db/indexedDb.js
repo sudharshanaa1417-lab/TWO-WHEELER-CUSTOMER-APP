@@ -1,15 +1,16 @@
 const DB_NAME = 'twf_offline_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'customers';
 const META_STORE = 'meta';
-const FALLBACK_KEY = 'twf_customers_fallback_v1';
-const SEEDED_KEY = 'twf_seeded_v1';
+const FALLBACK_KEY = 'twf_customers_fallback_v2';
+const SEEDED_KEY = 'twf_seeded_v2';
 
 export const DEMO_CUSTOMERS = [
   {
     id: 'cust-tn15-001',
     customerName: 'Karthikeyan S',
     vehicleNumber: 'TN 15 AB 1234',
+    loanNumber: 'A15 G27',
     mobileNumber: '9876543210',
     address: '14, Gandhi Road, Villupuram - 605602',
     vehicleModel: 'Honda Activa 6G',
@@ -23,6 +24,7 @@ export const DEMO_CUSTOMERS = [
     id: 'cust-tn15-002',
     customerName: 'Muruganandam R',
     vehicleNumber: 'TN 15 AC 5678',
+    loanNumber: 'A15 G28',
     mobileNumber: '9443218765',
     address: '27, Bazaar Street, Ulundurpet - 606107',
     vehicleModel: 'TVS Apache RTR 160',
@@ -36,6 +38,7 @@ export const DEMO_CUSTOMERS = [
     id: 'cust-tn15-003',
     customerName: 'Priyadharshini V',
     vehicleNumber: 'TN 15 AD 9012',
+    loanNumber: 'A15 G29',
     mobileNumber: '9080123456',
     address: '88, Nehru Nagar, Kallakurichi - 606202',
     vehicleModel: 'Suzuki Access 125',
@@ -49,6 +52,7 @@ export const DEMO_CUSTOMERS = [
     id: 'cust-tn09-004',
     customerName: 'Aravind Kumar M',
     vehicleNumber: 'TN 09 CK 4421',
+    loanNumber: 'B09 K41',
     mobileNumber: '9789054321',
     address: '5, Anna Salai, Teynampet, Chennai - 600018',
     vehicleModel: 'Royal Enfield Classic 350',
@@ -62,12 +66,13 @@ export const DEMO_CUSTOMERS = [
     id: 'cust-tn38-005',
     customerName: 'Senthil Nathan K',
     vehicleNumber: 'TN 38 BQ 7789',
+    loanNumber: 'C38 N12',
     mobileNumber: '9629876543',
     address: '102, Avinashi Road, Peelamedu, Coimbatore - 641004',
     vehicleModel: 'Bajaj Pulsar N160',
     financeAmount: 124000,
     monthlyPayment: 5200,
-    remarks: 'Reminder sent for current month EMI',
+    remarks: 'Reminder sent for November EMI',
     createdAt: '2026-05-22T16:45:00.000Z',
     updatedAt: '2026-05-22T16:45:00.000Z'
   }
@@ -82,10 +87,16 @@ function openDb() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
+      let store;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('vehicleNumber', 'vehicleNumber', { unique: false });
         store.createIndex('customerName', 'customerName', { unique: false });
+      } else {
+        store = req.transaction.objectStore(STORE_NAME);
+      }
+      if (!store.indexNames.contains('loanNumber')) {
+        store.createIndex('loanNumber', 'loanNumber', { unique: false });
       }
       if (!db.objectStoreNames.contains(META_STORE)) {
         db.createObjectStore(META_STORE, { keyPath: 'key' });
@@ -98,7 +109,7 @@ function openDb() {
 
 function readLocalFallback() {
   try {
-    const raw = localStorage.getItem(FALLBACK_KEY);
+    const raw = localStorage.getItem(FALLBACK_KEY) || localStorage.getItem('twf_customers_fallback_v1');
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -113,10 +124,21 @@ function writeLocalFallback(list) {
   }
 }
 
+function ensureLoanNumber(customer, index = 0) {
+  if (customer.loanNumber && String(customer.loanNumber).trim()) {
+    return String(customer.loanNumber).trim().toUpperCase();
+  }
+  const demo = DEMO_CUSTOMERS.find(
+    (d) => d.id === customer.id || d.vehicleNumber === customer.vehicleNumber
+  );
+  if (demo && demo.loanNumber) return demo.loanNumber;
+  return `A15 G${String(27 + (index % 70)).padStart(2, '0')}`;
+}
+
 export async function getAllCustomers() {
   try {
     const db = await openDb();
-    const list = await new Promise((resolve, reject) => {
+    let list = await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();
@@ -130,6 +152,20 @@ export async function getAllCustomers() {
       return [...DEMO_CUSTOMERS];
     }
 
+    // Auto-backfill loanNumber for any already existing records
+    let needsUpdate = false;
+    list = list.map((c, idx) => {
+      if (!c.loanNumber) {
+        needsUpdate = true;
+        return { ...c, loanNumber: ensureLoanNumber(c, idx) };
+      }
+      return c;
+    });
+
+    if (needsUpdate) {
+      await replaceAllCustomers(list);
+    }
+
     localStorage.setItem(SEEDED_KEY, '1');
     writeLocalFallback(list);
     return list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -139,6 +175,12 @@ export async function getAllCustomers() {
       list = [...DEMO_CUSTOMERS];
       writeLocalFallback(list);
       localStorage.setItem(SEEDED_KEY, '1');
+    } else {
+      list = list.map((c, idx) => ({
+        ...c,
+        loanNumber: ensureLoanNumber(c, idx)
+      }));
+      writeLocalFallback(list);
     }
     return list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   }
@@ -150,6 +192,10 @@ export async function saveCustomer(customer) {
     ...customer,
     id: customer.id || `cust-${crypto.randomUUID().slice(0, 8)}`,
     vehicleNumber: String(customer.vehicleNumber || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ' '),
+    loanNumber: String(customer.loanNumber || '')
       .trim()
       .toUpperCase()
       .replace(/\s+/g, ' '),
@@ -197,13 +243,14 @@ export async function removeCustomer(id) {
 }
 
 export async function replaceAllCustomers(records) {
-  const normalized = (records || []).map((c) => ({
+  const normalized = (records || []).map((c, idx) => ({
     ...c,
     id: c.id || `cust-${crypto.randomUUID().slice(0, 8)}`,
     vehicleNumber: String(c.vehicleNumber || '')
       .trim()
       .toUpperCase()
       .replace(/\s+/g, ' '),
+    loanNumber: ensureLoanNumber(c, idx),
     financeAmount: Number(c.financeAmount) || 0,
     monthlyPayment: Number(c.monthlyPayment) || 0,
     createdAt: c.createdAt || new Date().toISOString(),

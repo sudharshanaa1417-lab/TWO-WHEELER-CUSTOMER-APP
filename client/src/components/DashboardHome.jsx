@@ -2,11 +2,9 @@ import React from 'react';
 import {
   ArrowUpRight,
   FileSpreadsheet,
-  IndianRupee,
   Search,
   UserPlus,
-  Users,
-  Wallet
+  Users
 } from 'lucide-react';
 import { formatINR } from '../utils/format';
 
@@ -16,46 +14,24 @@ export default function DashboardHome({
   onOpenAdd,
   onSelectCustomer
 }) {
-  const totalFinanced = customers.reduce((sum, c) => sum + (Number(c.financeAmount) || 0), 0);
-  const totalMonthly = customers.reduce((sum, c) => sum + (Number(c.monthlyPayment) || 0), 0);
   const recentCustomers = customers.slice(0, 3);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      {/* Live Portfolio Glass Ribbon */}
-      <section className="kpi-ribbon" aria-label="Portfolio Summary">
-        <div className="glass-panel kpi-card">
+      {/* Total Customers Ribbon (Financial portfolio and monthly EMI target removed per request) */}
+      <section className="kpi-ribbon" aria-label="Customer Summary">
+        <div className="glass-panel kpi-card" style={{ flex: '1 1 auto' }}>
           <div>
             <div className="kpi-label">Total Customers</div>
             <div className="kpi-value">{customers.length}</div>
           </div>
           <div className="kpi-icon-wrap" style={{ color: 'var(--accent-emerald)' }}>
-            <Users size={19} />
-          </div>
-        </div>
-
-        <div className="glass-panel kpi-card">
-          <div>
-            <div className="kpi-label">Finance Portfolio</div>
-            <div className="kpi-value">{formatINR(totalFinanced)}</div>
-          </div>
-          <div className="kpi-icon-wrap" style={{ color: 'var(--accent-cyan)' }}>
-            <IndianRupee size={19} />
-          </div>
-        </div>
-
-        <div className="glass-panel kpi-card">
-          <div>
-            <div className="kpi-label">Monthly EMI Target</div>
-            <div className="kpi-value">{formatINR(totalMonthly)}</div>
-          </div>
-          <div className="kpi-icon-wrap" style={{ color: 'var(--accent-amber)' }}>
-            <Wallet size={19} />
+            <Users size={22} />
           </div>
         </div>
       </section>
 
-      {/* Core 2x2 App Architecture Grid (matches requested mockup) */}
+      {/* Core 2x2 App Architecture Grid */}
       <section className="dashboard-grid" aria-label="Main Navigation Modules">
         <button
           type="button"
@@ -73,7 +49,7 @@ export default function DashboardHome({
             <p className="module-subtitle">Customer List</p>
           </div>
           <div className="module-footer">
-            <span>View all profiles & EMI terms</span>
+            <span>View all profiles, loan numbers &amp; vehicle details</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -87,14 +63,14 @@ export default function DashboardHome({
             <div className="module-icon module-icon--cyan">
               <UserPlus size={25} />
             </div>
-            <span className="module-badge">8 Fields</span>
+            <span className="module-badge">New Entry</span>
           </div>
           <div>
             <h2 className="module-title">Add Customer</h2>
             <p className="module-subtitle">New Entry</p>
           </div>
           <div className="module-footer">
-            <span>Instant offline save to device</span>
+            <span>Add Vehicle, Loan No (e.g. A15 G27) &amp; Save offline</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -115,7 +91,7 @@ export default function DashboardHome({
             <p className="module-subtitle">Find Customer</p>
           </div>
           <div className="module-footer">
-            <span>Try &quot;TN 15&quot;, name, mobile or model</span>
+            <span>Search by Vehicle No (TN 15), Loan No (A15 G27), or Name</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -136,7 +112,7 @@ export default function DashboardHome({
             <p className="module-subtitle">Import / Export</p>
           </div>
           <div className="module-footer">
-            <span>Bulk upload & backup sheets</span>
+            <span>Bulk upload &amp; backup sheets offline</span>
             <ArrowUpRight size={16} />
           </div>
         </button>
@@ -177,7 +153,8 @@ export default function DashboardHome({
                 style={{
                   padding: '14px',
                   borderRadius: '18px',
-                  background: 'var(--glass-bg-subtle)'
+                  background: 'var(--glass-bg-subtle)',
+                  textAlign: 'left'
                 }}
               >
                 <div
@@ -190,16 +167,20 @@ export default function DashboardHome({
                   }}
                 >
                   <span className="vehicle-plate">{c.vehicleNumber || 'NO PLATE'}</span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.82rem',
-                      fontWeight: 700,
-                      color: 'var(--accent-emerald)'
-                    }}
-                  >
-                    {formatINR(c.monthlyPayment)}/mo
-                  </span>
+                  {c.loanNumber && (
+                    <span
+                      className="glass-pill"
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        color: 'var(--accent-amber)',
+                        padding: '2px 7px'
+                      }}
+                    >
+                      {c.loanNumber}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontWeight: 700, fontSize: '0.96rem' }}>{c.customerName}</div>
                 <div

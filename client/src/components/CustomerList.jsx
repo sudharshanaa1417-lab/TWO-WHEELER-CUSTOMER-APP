@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Bike,
+  FileText,
   LayoutGrid,
   MapPin,
   Phone,
@@ -33,6 +34,9 @@ export default function CustomerList({
       if (sortBy === 'vehicle') {
         return String(a.vehicleNumber).localeCompare(String(b.vehicleNumber));
       }
+      if (sortBy === 'loan') {
+        return String(a.loanNumber || '').localeCompare(String(b.loanNumber || ''));
+      }
       if (sortBy === 'amount') {
         return (Number(b.financeAmount) || 0) - (Number(a.financeAmount) || 0);
       }
@@ -46,7 +50,7 @@ export default function CustomerList({
         <div>
           <h2 className="section-title">Customer List ({displayed.length})</h2>
           <p className="section-subtitle">
-            All 8 database columns stored locally offline — tap any customer for full profile
+            All customer details and loan numbers stored locally offline — tap any customer for full profile
           </p>
         </div>
 
@@ -83,7 +87,7 @@ export default function CustomerList({
             type="text"
             className="glass-input"
             style={{ paddingLeft: '38px' }}
-            placeholder="Quick filter (e.g. TN 15, name, mobile, model)..."
+            placeholder="Quick filter (e.g. TN 15, A15 G27, name, mobile)..."
             value={quickFilter}
             onChange={(e) => setQuickFilter(e.target.value)}
           />
@@ -98,6 +102,7 @@ export default function CustomerList({
         >
           <option value="recent">Sort: Recently Updated</option>
           <option value="vehicle">Sort: Vehicle Number</option>
+          <option value="loan">Sort: Loan Number</option>
           <option value="name">Sort: Customer Name</option>
           <option value="amount">Sort: Finance Amount</option>
         </select>
@@ -131,16 +136,10 @@ export default function CustomerList({
             background: 'var(--glass-bg-subtle)'
           }}
         >
-          <p style={{ margin: 0, fontWeight: 600 }}>No customers found</p>
-          <p style={{ margin: '6px 0 16px', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-            {quickFilter
-              ? 'Try clearing your filter or add a new entry.'
-              : 'Add your first two-wheeler finance customer or import from Excel.'}
+          <p style={{ margin: 0, fontWeight: 600 }}>No customers found matching filter</p>
+          <p style={{ margin: '6px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            Try searching a different vehicle number, loan number (e.g. A15 G27), or clear the search.
           </p>
-          <button type="button" className="btn btn-primary btn-sm" onClick={onOpenAdd}>
-            <Plus size={15} />
-            <span>New Entry</span>
-          </button>
         </div>
       ) : viewMode === 'cards' ? (
         <div className="customer-cards-grid">
@@ -150,7 +149,7 @@ export default function CustomerList({
               type="button"
               className="glass-panel glass-tile customer-card"
               onClick={() => onSelectCustomer(c)}
-              style={{ background: 'var(--glass-bg-subtle)' }}
+              style={{ background: 'var(--glass-bg-subtle)', textAlign: 'left' }}
             >
               <div className="customer-card-top">
                 <div>
@@ -167,9 +166,26 @@ export default function CustomerList({
                     </span>
                   </div>
                 </div>
-                <span className="vehicle-plate">
-                  <HighlightText text={c.vehicleNumber} query={quickFilter} />
-                </span>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                  <span className="vehicle-plate">
+                    <HighlightText text={c.vehicleNumber} query={quickFilter} />
+                  </span>
+                  {c.loanNumber && (
+                    <span
+                      className="glass-pill"
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        color: 'var(--accent-amber)',
+                        padding: '2px 8px'
+                      }}
+                    >
+                      Loan: <HighlightText text={c.loanNumber} query={quickFilter} />
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="customer-meta">
@@ -233,6 +249,7 @@ export default function CustomerList({
               <tr>
                 <th>Customer Name</th>
                 <th>Vehicle Number</th>
+                <th>Loan Number</th>
                 <th>Mobile Number</th>
                 <th>Vehicle Model</th>
                 <th>Finance Amount</th>
@@ -248,17 +265,30 @@ export default function CustomerList({
                     <HighlightText text={c.customerName} query={quickFilter} />
                   </td>
                   <td>
-                    <span className="vehicle-plate">
+                    <span className="vehicle-plate" style={{ fontSize: '0.82rem' }}>
                       <HighlightText text={c.vehicleNumber} query={quickFilter} />
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className="glass-pill"
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        fontSize: '0.78rem',
+                        color: 'var(--accent-amber)'
+                      }}
+                    >
+                      <HighlightText text={c.loanNumber || '—'} query={quickFilter} />
                     </span>
                   </td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>
                     <HighlightText text={c.mobileNumber} query={quickFilter} />
                   </td>
                   <td>
-                    <HighlightText text={c.vehicleModel} query={quickFilter} />
+                    <HighlightText text={c.vehicleModel || '—'} query={quickFilter} />
                   </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                     {formatINR(c.financeAmount)}
                   </td>
                   <td
@@ -270,11 +300,11 @@ export default function CustomerList({
                   >
                     {formatINR(c.monthlyPayment)}
                   </td>
-                  <td style={{ maxWidth: '200px' }}>
-                    <HighlightText text={c.address} query={quickFilter} />
+                  <td style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
+                    <HighlightText text={c.address || '—'} query={quickFilter} />
                   </td>
-                  <td style={{ maxWidth: '180px' }}>
-                    <HighlightText text={c.remarks} query={quickFilter} />
+                  <td style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
+                    <HighlightText text={c.remarks || '—'} query={quickFilter} />
                   </td>
                 </tr>
               ))}

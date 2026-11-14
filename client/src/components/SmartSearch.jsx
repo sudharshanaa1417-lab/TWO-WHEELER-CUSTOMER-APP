@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Bike,
+  FileText,
   MapPin,
   Phone,
   Search,
@@ -18,6 +19,7 @@ import HighlightText from './HighlightText';
 
 const FIELD_LABELS = {
   vehicleNumber: 'Vehicle Number',
+  loanNumber: 'Loan Number',
   customerName: 'Customer Name',
   mobileNumber: 'Mobile Number',
   address: 'Address',
@@ -44,7 +46,7 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
             <span>Smart Search · Find Customer</span>
           </h2>
           <p className="section-subtitle">
-            Search by Vehicle Number (e.g. TN 15), Name, Mobile, Address, or Vehicle Model with live highlighting
+            Search by Vehicle Number (e.g. TN 15), Loan Number (e.g. A15 G27), Customer Name, Mobile, Address, or Model
           </p>
         </div>
       </div>
@@ -71,7 +73,7 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
             fontWeight: 600,
             borderRadius: '18px'
           }}
-          placeholder="Type TN 15, Karthik, 98765, Activa, Villupuram..."
+          placeholder="Type TN 15, A15 G27, Karthik, 98765, Activa, Villupuram..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoFocus
@@ -145,6 +147,18 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
               <span style={{ opacity: 0.7 }}>({p.count})</span>
             </button>
           ))}
+          <button
+            type="button"
+            className={`glass-pill ${
+              query.trim().toUpperCase() === 'A15' ? 'glass-pill--active' : ''
+            }`}
+            onClick={() => {
+              setFieldFilter('all');
+              setQuery('A15');
+            }}
+          >
+            <span style={{ fontFamily: 'var(--font-mono)' }}>LOAN: A15</span>
+          </button>
         </div>
       )}
 
@@ -160,8 +174,7 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
         >
           <p style={{ margin: 0, fontWeight: 600 }}>Start typing to find any customer</p>
           <p style={{ margin: '6px 0 0', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-            Example: Searching <strong>TN 15</strong> lists all matching plates like{' '}
-            <span className="vehicle-plate">TN 15 AB 1234</span> and highlights matching letters.
+            Example: Searching <strong>TN 15</strong> or <strong>A15 G27</strong> immediately lists all matching records with live highlighted text.
           </p>
         </div>
       ) : (
@@ -194,7 +207,7 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
             >
               <p style={{ margin: 0, fontWeight: 600 }}>No matching customer found</p>
               <p style={{ margin: '6px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Try switching filter to &quot;All Fields&quot; or searching another part of the plate, name, or phone.
+                Try switching filter to &quot;All Fields&quot; or searching another part of Vehicle No, Loan No (e.g. A15), Name, or Phone.
               </p>
             </div>
           ) : (
@@ -205,7 +218,7 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
                   type="button"
                   className="glass-panel glass-tile customer-card"
                   onClick={() => onSelectCustomer(c)}
-                  style={{ background: 'var(--glass-bg-subtle)' }}
+                  style={{ background: 'var(--glass-bg-subtle)', textAlign: 'left' }}
                 >
                   <div className="customer-card-top">
                     <div>
@@ -221,14 +234,31 @@ export default function SmartSearch({ customers, onSelectCustomer }) {
                       >
                         <Bike size={14} style={{ color: 'var(--accent-cyan)' }} />
                         <span>
-                          <HighlightText text={c.vehicleModel} query={query} />
+                          <HighlightText text={c.vehicleModel || 'Two Wheeler'} query={query} />
                         </span>
                       </div>
                     </div>
 
-                    <span className="vehicle-plate">
-                      <HighlightText text={c.vehicleNumber} query={query} />
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                      <span className="vehicle-plate">
+                        <HighlightText text={c.vehicleNumber} query={query} />
+                      </span>
+                      {c.loanNumber && (
+                        <span
+                          className="glass-pill"
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            color: 'var(--accent-amber)',
+                            borderColor: 'rgba(251, 191, 36, 0.45)',
+                            padding: '2px 8px'
+                          }}
+                        >
+                          Loan: <HighlightText text={c.loanNumber} query={query} />
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="customer-meta">
