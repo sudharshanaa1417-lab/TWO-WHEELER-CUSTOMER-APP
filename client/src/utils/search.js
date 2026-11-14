@@ -16,10 +16,28 @@ const ALL_SEARCHABLE_KEYS = [
   'remarks'
 ];
 
+function mergeRanges(ranges) {
+  if (ranges.length <= 1) return ranges;
+  const sorted = ranges.slice().sort((a, b) => a[0] - b[0]);
+  const merged = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = merged[merged.length - 1];
+    const curr = sorted[i];
+    if (curr[0] <= prev[1]) {
+      prev[1] = Math.max(prev[1], curr[1]);
+    } else {
+      merged.push(curr);
+    }
+  }
+  return merged;
+}
+
 /**
  * Finds match ranges in `text` for `query`.
- * Supports both exact case-insensitive matches (e.g. "TN 15")
- * and space-agnostic matches (e.g. "tn15" matching "TN 15 AB 1234").
+ * Supports:
+ *  1. Exact case-insensitive matches (e.g. "TN 15")
+ *  2. Space-agnostic matches (e.g. "tn15" matching "TN 15 AB 1234")
+ *  3. Multi-token matches (e.g. "TN 1234" matching and highlighting both "TN" and "1234")
  */
 export function findMatchRanges(text, query) {
   const source = String(text ?? '');
@@ -42,28 +60,48 @@ export function findMatchRanges(text, query) {
 
   // 2. Space-tolerant matching (e.g. "tn15" -> "TN 15", "987654" -> "98765 43210")
   const compactQuery = lowerQuery.replace(/\s+/g, '');
-  if (!compactQuery) return [];
+  if (compactQuery.length > 0) {
+    const charMap = [];
+    let compactSource = '';
+    for (let i = 0; i < lowerSource.length; i++) {
+      if (!/\s/.test(lowerSource[i])) {
+        charMap.push(i);
+        compactSource += lowerSource[i];
+      }
+    }
 
-  const charMap = [];
-  let compactSource = '';
-  for (let i = 0; i < lowerSource.length; i++) {
-    if (!/\s/.test(lowerSource[i])) {
-      charMap.push(i);
-      compactSource += lowerSource[i];
+    const compactRanges = [];
+    let cIdx = 0;
+    while (cIdx < compactSource.length) {
+      const hit = compactSource.indexOf(compactQuery, cIdx);
+      if (hit === -1) break;
+      const origStart = charMap[hit];
+      const origEnd = charMap[hit + compactQuery.length - 1] + 1;
+      compactRanges.push([origStart, origEnd]);
+      cIdx = hit + compactQuery.length;
+    }
+    if (compactRanges.length > 0) return compactRanges;
+  }
+
+  // 3. Multi-token partial highlighting (when query has multiple words like "TN 1234" or "Karthik Activa")
+  const tokens = lowerQuery.split(/\s+/).filter((t) => t.length > 0);
+  if (tokens.length > 1) {
+    const tokenRanges = [];
+    for (const tok of tokens) {
+      let tIdx = 0;
+      while (tIdx < lowerSource.length) {
+        const found = lowerSource.indexOf(tok, tIdx);
+        if (found === -1) break;
+        tokenRanges.push([found, found + tok.length]);
+        tIdx = found + tok.length;
+      }
+    }
+    if (tokenRanges.length > 0) {
+      return mergeRanges(tokenRanges);
     }
   }
 
-  const compactRanges = [];
-  let cIdx = 0;
-  while (cIdx < compactSource.length) {
-    const hit = compactSource.indexOf(compactQuery, cIdx);
-    if (hit === -1) break;
-    const origStart = charMap[hit];
-    const origEnd = charMap[hit + compactQuery.length - 1] + 1;
-    compactRanges.push([origStart, origEnd]);
-    cIdx = hit + compactQuery.length;
-  }
-  return compactRanges;
+  return [];
 }
 
 export function getHighlightSegments(text, query) {
@@ -92,26 +130,59 @@ export function smartSearchCustomers(customers, query, fieldFilter = 'all') {
   const q = String(query ?? '').trim();
   if (!q) return [];
 
-  const keysToSearch =
-    fieldFilter === 'all' ? ALL_SEARCHABLE_KEYS : [fieldFilter];
+  const lowerQ = q.toLowerCase();
+  const compactQ = lowerQ.replace(/\s+/g, '');
+  const tokens = lowerQ.split(/\s+/).filter(Boolean);
+  const keysToSearch = fieldFilter === 'all' ? ALL_SEARCHABLE_KEYS : [fieldFilter];
 
   const results = [];
   for (const customer of customers) {
     const matchedFields = [];
     let bestScore = 0;
+    const tokensMatched = new Set();
 
     for (const key of keysToSearch) {
       const value = String(customer[key] ?? '');
-      const ranges = findMatchRanges(value, q);
-      if (ranges.length > 0) {
+      const lowerVal = value.toLowerCase();
+      const compactVal = lowerVal.replace(/\s+/g, '');
+
+      // Check full phrase match
+      const exactMatch = lowerVal.includes(lowerQ);
+      const compactMatch = compactQ.length > 0 && compactVal.includes(compactQ);
+
+      if (exactMatch || compactMatch) {
         matchedFields.push(key);
-        let score = key === 'vehicleNumber' ? 100 : key === 'customerName' ? 80 : 60;
-        if (ranges[0][0] === 0) score += 30; // Prefix match boost (e.g. "TN 15" at start)
+        let score = key === 'vehicleNumber' ? 120 : key === 'customerName' ? 100 : 80;
+        if (lowerVal.startsWith(lowerQ) || compactVal.startsWith(compactQ)) {
+          score += 40; // Prefix bonus (e.g. "TN 15" at start of vehicle number)
+        }
         if (score > bestScore) bestScore = score;
+      }
+
+      // Check token match
+      for (const tok of tokens) {
+        if (lowerVal.includes(tok)) {
+          tokensMatched.add(tok);
+        }
       }
     }
 
-    if (matchedFields.length > 0) {
+    // A customer qualifies if:
+    // 1) Direct full phrase match in one of the fields, OR
+    // 2) If query has multiple tokens (e.g. "Karthik Activa" or "TN 1234"), ALL tokens are covered across searchable fields!
+    const allTokensCovered = tokens.length > 1 && tokens.every((t) => tokensMatched.has(t));
+
+    if (bestScore > 0 || allTokensCovered) {
+      if (bestScore === 0) {
+        bestScore = 60;
+        // Collect which fields matched any token
+        for (const key of keysToSearch) {
+          const lowerVal = String(customer[key] ?? '').toLowerCase();
+          if (tokens.some((t) => lowerVal.includes(t)) && !matchedFields.includes(key)) {
+            matchedFields.push(key);
+          }
+        }
+      }
       results.push({ customer, matchedFields, score: bestScore });
     }
   }
